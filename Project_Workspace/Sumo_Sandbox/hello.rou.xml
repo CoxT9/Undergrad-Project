@@ -2,9 +2,9 @@
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo-sim.org/xsd/routes_file.xsd">
   <vType accel="1.0" decel="5.0" id="Car" length="5.0" minGap="2.0" maxSpeed="50.0" sigma="0" />
 
-  <route id="route0" edges="1to2 out" />
-  <route id="route1" edges="newlane closeloop out"/>
+  <route id="route0" edges="-1011 -612" />
+  <!--<route id="route1" edges="newlane closeloop out"/>-->
 
   <vehicle depart="1" id="veh0" route="route0" type="Car" />
-  <vehicle depart="1" id="veh1" route="route1" type="Car" />
+  <!--<vehicle depart="1" id="veh1" route="route1" type="Car" />-->
 </routes>
