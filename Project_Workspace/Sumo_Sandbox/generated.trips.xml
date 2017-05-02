@@ -1,14 +1,14 @@
 <?xml version="1.0"?>
 <!-- generated on 2017-05-01 11:28:25.550817 by $Id: randomTrips.py 14677 2013-09-11 08:30:08Z behrisch $ -->
 <trips>
-    <trip id="0" depart="0.00" from="1033" to="-618" />
-    <trip id="1" depart="1.00" from="-3761" to="1767" />
-    <trip id="2" depart="2.00" from="-2206" to="3095" />
-    <trip id="3" depart="3.00" from="338" to="2482" />
-    <trip id="4" depart="4.00" from="-2285" to="1773" />
-    <trip id="5" depart="5.00" from="618" to="-679" />
-    <trip id="6" depart="6.00" from="3773" to="-3121" />
-    <trip id="7" depart="7.00" from="-4027" to="2278" />
+    <trip id="0" depart="0.00" from="3155" to="3734" />
+		<trip id="1" depart="0.00" from="-3761" to="1767" />
+    <trip id="2" depart="0.00" from="-2206" to="3095" />
+    <trip id="3" depart="0.00" from="338" to="2482" />
+    <trip id="4" depart="0.00" from="-2285" to="1773" />
+    <trip id="5" depart="0.00" from="618" to="-679" />
+    <trip id="6" depart="0.00" from="3773" to="-3121" />
+    <trip id="7" depart="0.00" from="-4027" to="2278" />
     <trip id="8" depart="8.00" from="-1942" to="3439" />
     <trip id="9" depart="9.00" from="19" to="3734" />
     <trip id="10" depart="10.00" from="25" to="-870" />
