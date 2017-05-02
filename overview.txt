@@ -1,0 +1,31 @@
+Overview for COMP 4520
+
+1. VANET
+
+- Basics & Terminology
+- Decouple Packet Transmission and Route Planning
+- Traffic sensitivty in route planning
+- Graph theory analogies (k-connectivity, weights, flow & capacity)
+- Existing approaches ie: Dijkstra-Recompute
+
+2. ACO
+
+- Basics & Terminology
+- Application and usage
+- Usage in VANET -> Route planning
+- Usage for Traffic Sensitivity, examine MACO
+- Propose an algorithm or strategy
+
+3. Simulate
+
+- Basic SUMO
+- Routes in SUMO
+- Simple routes on Larger datasets
+- Dijkstras on SUMO
+- Dynamic weights in SUMO
+- Dijkstra-Recompute
+- Weights as a function of vehicles present
+- Simple ACO
+- Reverse-ACO
+- Reverse-ACO with recompute shortest path
+- Performance comparison
