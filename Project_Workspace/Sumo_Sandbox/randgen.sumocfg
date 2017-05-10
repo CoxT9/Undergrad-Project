@@ -11,4 +11,7 @@
         <begin value="0"/>
         <end value="10000"/>
     </time>
+		<additional>
+			<edgeData id="1" file="edgeDataInfo.xml"/>
+		</additional>
 </configuration>

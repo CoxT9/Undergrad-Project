@@ -1,0 +1,14 @@
+Lit survey papers so far:
+
+http://www.ijsrd.com/articles/IJSRDV2I1086.pdf - VANET Survey (Architecture, less important)
+
+"Inverted ACO Papers":
+http://www.tandfonline.com/doi/abs/10.1080/15472450.2014.941758 - "Don't go with the ant flow"
+https://www.researchgate.net/publication/264752116_An_Inverted_Ant_Colony_Optimization_approach_to_traffic - "Inverted ACO Approach"
+http://link.springer.com/chapter/10.1007/978-3-319-28031-8_33 - "MACO - Parallel"
+http://www.tandfonline.com/doi/abs/10.1080/08839514.2017.1300017 - "MACO - Preemptive"
+
+Other Surveys:
+http://download.springer.com/static/pdf/755/art%253A10.1007%252Fs00500-017-2492-z.pdf?originUrl=http%3A%2F%2Flink.springer.com%2Farticle%2F10.1007%2Fs00500-017-2492-z&token2=exp=1494434212~acl=%2Fstatic%2Fpdf%2F755%2Fart%25253A10.1007%25252Fs00500-017-2492-z.pdf%3ForiginUrl%3Dhttp%253A%252F%252Flink.springer.com%252Farticle%252F10.1007%252Fs00500-017-2492-z*~hmac=701cee075f81414bd25a6ef6de076d4e470b641901d78420232cbe218d253266 - 2017 VANET-Traffic Survey Paper. Has ACO section with some good links
+
+https://umexpert.um.edu.my/file/publication/00006027_100531.pdf - 2014 ACO-VANET Survey. Good links but a little older
