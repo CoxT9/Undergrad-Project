@@ -12,3 +12,15 @@ Other Surveys:
 http://download.springer.com/static/pdf/755/art%253A10.1007%252Fs00500-017-2492-z.pdf?originUrl=http%3A%2F%2Flink.springer.com%2Farticle%2F10.1007%2Fs00500-017-2492-z&token2=exp=1494434212~acl=%2Fstatic%2Fpdf%2F755%2Fart%25253A10.1007%25252Fs00500-017-2492-z.pdf%3ForiginUrl%3Dhttp%253A%252F%252Flink.springer.com%252Farticle%252F10.1007%252Fs00500-017-2492-z*~hmac=701cee075f81414bd25a6ef6de076d4e470b641901d78420232cbe218d253266 - 2017 VANET-Traffic Survey Paper. Has ACO section with some good links
 
 https://umexpert.um.edu.my/file/publication/00006027_100531.pdf - 2014 ACO-VANET Survey. Good links but a little older
+
+Key links from first survey:
+
+https://www.researchgate.net/publication/267569706_Ant-based_Vehicle_Congestion_Avoidance_System_using_Vehicular_Networks - "Ant-based Vehicle Congestion Avoidance System Using Vehicular Networks"
+
+http://ijssst.info/Vol-15/No-4/data/4923a141.pdf - "Dynamic travel path optimization system using ant colony optimization"
+
+https://www.researchgate.net/publication/280558830_An_Ant_Colony_Optimization_Solution_to_the_Optimum_Travel_Path_Determination_Problem_in_VANETS_A_NetLogo_Modelling_Approach - "An ant colony optimization solution to the optimum travel path determination problem in vanets: a netlogo modelling approach"
+
+https://www.researchgate.net/publication/260420979_A_Dynamic_Vehicular_Traffic_Control_Using_Ant_Colony_and_Traffic_Light_Optimization - "A dynamic vehicular traffic control using ant colony and traffic light optimization"
+
+http://journals.sagepub.com/doi/full/10.1155/2015/271067 - " A Multimetric Ant Colony Optimization Algorithm for Dynamic Path Planning in Vehicular Networks"
