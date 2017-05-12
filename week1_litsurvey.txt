@@ -20,7 +20,7 @@ This article is behind a paywall. The authors modify the previous MACO algorithm
 
 5. http://www.tandfonline.com/doi/abs/10.1080/08839514.2017.1300017 - "Preemptive MACO (MACO-P) Algorithm for Reducing Travel Time in VANETs" (2017)
 
-This article is behind a paywall. The authors modify the previous MACO algorithm to evaluate the most appropriate pheromone values Before an intersection is reached. Instead of waiting to reach intersection to decide on the correct path, MACO-P evaluates the pheromone of upcoming path choices while the vehicle is still in transit.
+This article is behind a paywall. The authors modify the previous MACO algorithm to evaluate the most appropriate pheromone values Before an intersection is reached. Instead of waiting to reach an intersection to decide on the correct path, MACO-P evaluates the pheromone of upcoming path choices while the vehicle is still in transit.
 
 Existing Surveys:
 6. http://link.springer.com/article/10.1007/s00500-017-2492-z - Applications of Computation Intelligence in Vehicle Traffic Congestion Problem: A Survey (2017)
@@ -43,4 +43,4 @@ Dynamic Travel Path Optimization System (DTPOS) is proposed in this paper. DTPOS
 
 10. http://journals.sagepub.com/doi/full/10.1155/2015/271067 - " A Multimetric Ant Colony Optimization Algorithm for Dynamic Path Planning in Vehicular Networks" (2015)
 
-Multimetric ACO (M-ACO) is a distributed model for traffic routing in VANET. MACO uses "Multi Attribute Decision Making" to optimize a vehicle's route given a vector of different weights. The pheromone attribute on each artery is a function of all the attribute values on the given artery. The value-added of this paper is its use of weight-vectors as opposed to weights when examining the road traffic graph.
+Multimetric ACO (M-ACO) is a distributed model for traffic routing in VANET. M-ACO uses "Multi Attribute Decision Making" to optimize a vehicle's route given a vector of different weights. The pheromone attribute on each artery is a function of all the attribute values on the given artery. The value-added of this paper is its use of weight-vectors as opposed to weights when examining the road traffic graph.
