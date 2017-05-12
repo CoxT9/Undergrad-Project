@@ -1,26 +1,46 @@
-Lit survey papers so far:
+Lit survey papers:
 
-http://www.ijsrd.com/articles/IJSRDV2I1086.pdf - VANET Survey (Architecture, less important)
+1. http://www.ijsrd.com/articles/IJSRDV2I1086.pdf - Survey of Efficient Routing in VANET using Ant Colony Optimization Technique (2014)
+
+This is a survey of ACO for use in VANET packet-transmission problems. Researchers use "Routing" to discuss packet-transmission and "Traffic Routing" to discuss routing in the graph-traversal sense. While this paper has some valuable insight, it is a bit lower-level than the scope of this project. 
 
 "Inverted ACO Papers":
-http://www.tandfonline.com/doi/abs/10.1080/15472450.2014.941758 - "Don't go with the ant flow"
-https://www.researchgate.net/publication/264752116_An_Inverted_Ant_Colony_Optimization_approach_to_traffic - "Inverted ACO Approach"
-http://link.springer.com/chapter/10.1007/978-3-319-28031-8_33 - "MACO - Parallel"
-http://www.tandfonline.com/doi/abs/10.1080/08839514.2017.1300017 - "MACO - Preemptive"
+2. http://www.ia.urjc.es/att2012/papers/att2012_submission_18.pdf - "Don't Go With the Ant Flow: Ant-Inspired Traffic Routing in Urban Environments" (2014)
 
-Other Surveys:
-http://download.springer.com/static/pdf/755/art%253A10.1007%252Fs00500-017-2492-z.pdf?originUrl=http%3A%2F%2Flink.springer.com%2Farticle%2F10.1007%2Fs00500-017-2492-z&token2=exp=1494434212~acl=%2Fstatic%2Fpdf%2F755%2Fart%25253A10.1007%25252Fs00500-017-2492-z.pdf%3ForiginUrl%3Dhttp%253A%252F%252Flink.springer.com%252Farticle%252F10.1007%252Fs00500-017-2492-z*~hmac=701cee075f81414bd25a6ef6de076d4e470b641901d78420232cbe218d253266 - 2017 VANET-Traffic Survey Paper. Has ACO section with some good links
+This paper proposes a similar model of simple ACO on traffic networks (ie: vehicles leave pheromone on the arteries passed), but the pheromone acts as a Repellent force. The intention of inverted ACO is to encourage a uniform distribution of traffic loads throughout the graph. This work leaves questions in unpredictable changes in traffic, optimizing between distance and density, and system scalibility (uses a centralized system)
 
-https://umexpert.um.edu.my/file/publication/00006027_100531.pdf - 2014 ACO-VANET Survey. Good links but a little older
+3. https://www.researchgate.net/publication/264752116_An_Inverted_Ant_Colony_Optimization_approach_to_traffic - "An Inverted Ant Colony Optimization approach to traffic" (2014)
+
+This paper uses Inverted-ACO in a two-phase approach. The first phase involves vehicles running Dijkstra for their path traversal, which deposits pheromones. In the second phase, vehicles use IACO for their traversals (after the pheromone values have been populated). In this work, the number of vehicles adhering to IACO is introduced gradually (instead of all vehicles complying to the proposed system). This system proposed is decentralized. 
+
+These two papers are written by the same group which did MACO (the inverted-ACO paper from 2015)
+4. http://link.springer.com/chapter/10.1007/978-3-319-28031-8_33 - "Reducing Travel Time in VANETs with Parallel Implementation of MACO (Modified ACO)" (2015)
+
+This article is behind a paywall. The authors modify the previous MACO algorithm to leverage Nvidia GPUs for improved results.
+
+5. http://www.tandfonline.com/doi/abs/10.1080/08839514.2017.1300017 - "Preemptive MACO (MACO-P) Algorithm for Reducing Travel Time in VANETs" (2017)
+
+This article is behind a paywall. The authors modify the previous MACO algorithm to evaluate the most appropriate pheromone values Before an intersection is reached. Instead of waiting to reach intersection to decide on the correct path, MACO-P evaluates the pheromone of upcoming path choices while the vehicle is still in transit.
+
+Existing Surveys:
+6. http://link.springer.com/article/10.1007/s00500-017-2492-z - Applications of Computation Intelligence in Vehicle Traffic Congestion Problem: A Survey (2017)
+
+This is a very recent, very valuable survey on the state of research in the vehicle traffic congestion area. The survey also includes a section specifically addressing ACO-based approaches (or VTRSs - Vehicular Traffic Routing Systems). The work was recently placed behind a paywall, but key references have been appended to this mini-survey. 
+
+7. https://umexpert.um.edu.my/file/publication/00006027_100531.pdf - Ant colony optimization for vehicle traffic systems: applications and challenges (2014)
+
+This is a slightly older survey which specifically examines ACO approaches to the Vehicular Traffic Congestion problem. This mini-survey examines recent (past 3 years) advancements in the literature, but the survey linked is a repository of work undertaken in the past 10 years previous. 
 
 Key links from first survey:
 
-https://www.researchgate.net/publication/267569706_Ant-based_Vehicle_Congestion_Avoidance_System_using_Vehicular_Networks - "Ant-based Vehicle Congestion Avoidance System Using Vehicular Networks"
+8. https://www.researchgate.net/publication/267569706_Ant-based_Vehicle_Congestion_Avoidance_System_using_Vehicular_Networks - "Ant-based Vehicle Congestion Avoidance System Using Vehicular Networks" (2014)
 
-http://ijssst.info/Vol-15/No-4/data/4923a141.pdf - "Dynamic travel path optimization system using ant colony optimization"
+This paper proposes AVCAS, a centralized-distributed tool for guiding agents through the least congested shortest path. AVCAS relies on segmentation and layering of the road-map to allow for load balancing between multiple pseudo-centralized servers. AVCAS uses Forward and Backward ants with Vehicles and with Packets. Therefore, AVCAS has 4 different ant systems running concurrently. AVCAS measures travel time, vehicle density, and speed prediction in determining a vehicle's route. AVCAS tackles both packet-transmission and traffic-routing problems with ACO. 
 
-https://www.researchgate.net/publication/280558830_An_Ant_Colony_Optimization_Solution_to_the_Optimum_Travel_Path_Determination_Problem_in_VANETS_A_NetLogo_Modelling_Approach - "An ant colony optimization solution to the optimum travel path determination problem in vanets: a netlogo modelling approach"
+9. https://www.researchgate.net/publication/280558830_An_Ant_Colony_Optimization_Solution_to_the_Optimum_Travel_Path_Determination_Problem_in_VANETS_A_NetLogo_Modelling_Approach - "An Ant Colony Optimization Solution to the Optimum Travel Path Determination Problem in VANETS: A NetLogo Modelling Approach" (2015)
 
-https://www.researchgate.net/publication/260420979_A_Dynamic_Vehicular_Traffic_Control_Using_Ant_Colony_and_Traffic_Light_Optimization - "A dynamic vehicular traffic control using ant colony and traffic light optimization"
+Dynamic Travel Path Optimization System (DTPOS) is proposed in this paper. DTPOS defines a formula for trading off between traffic density and artery distance when selecting a candidate route. DTPOS uses V2V to avoid routes with high load. DTPOS is a pheremone-repellent system - high pheremone (density) on a path p will discourage new vehicles from using p in their route.
 
-http://journals.sagepub.com/doi/full/10.1155/2015/271067 - " A Multimetric Ant Colony Optimization Algorithm for Dynamic Path Planning in Vehicular Networks"
+10. http://journals.sagepub.com/doi/full/10.1155/2015/271067 - " A Multimetric Ant Colony Optimization Algorithm for Dynamic Path Planning in Vehicular Networks" (2015)
+
+Multimetric ACO (M-ACO) is a distributed model for traffic routing in VANET. MACO uses "Multi Attribute Decision Making" to optimize a vehicle's route given a vector of different weights. The pheromone attribute on each artery is a function of all the attribute values on the given artery. The value-added of this paper is its use of weight-vectors as opposed to weights when examining the road traffic graph.
