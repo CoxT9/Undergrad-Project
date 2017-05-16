@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!-- generated on Tue May 16 12:01:19 2017 by SUMO duarouter Version 0.19.0
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo-sim.org/xsd/duarouterConfiguration.xsd">
+
+    <input>
+        <net-file value="BasicNetwork.net.xml"/>
+        <trip-files value="BasicTrips.trips.xml"/>
+    </input>
+
+    <output>
+        <output-file value="BasicRoutes.rou.xml"/>
+    </output>
+
+    <processing>
+        <routing-algorithm value="dijkstra"/>
+    </processing>
+
+</configuration>
+-->
+
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo-sim.org/xsd/routes_file.xsd">
+    <vehicle id="0" depart="0.00">
+        <routeDistribution last="0">
+            <route cost="64.75" probability="1.00000000" edges="-3 9 19 123 -123"/>
+        </routeDistribution>
+    </vehicle>
+    <vehicle id="1" depart="1.00">
+        <routeDistribution last="0">
+            <route cost="42.33" probability="1.00000000" edges="121 -121 -19"/>
+        </routeDistribution>
+    </vehicle>
+    <vehicle id="2" depart="2.00">
+        <routeDistribution last="0">
+            <route cost="55.40" probability="1.00000000" edges="-125 -19 -9 7"/>
+        </routeDistribution>
+    </vehicle>
+    <vehicle id="3" depart="3.00">
+        <routeDistribution last="0">
+            <route cost="61.77" probability="1.00000000" edges="17 64 -121 123 -123"/>
+        </routeDistribution>
+    </vehicle>
+    <vehicle id="4" depart="4.00">
+        <routeDistribution last="0">
+            <route cost="34.59" probability="1.00000000" edges="123 -123 125"/>
+        </routeDistribution>
+    </vehicle>
+</routes>

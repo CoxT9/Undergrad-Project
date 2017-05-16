@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<!-- generated on 2017-05-16 12:00:03.564893 by $Id: randomTrips.py 14677 2013-09-11 08:30:08Z behrisch $ -->
+<trips>
+    <trip id="0" depart="0.00" from="-3" to="-123" />
+    <trip id="1" depart="1.00" from="121" to="-19" />
+    <trip id="2" depart="2.00" from="-125" to="7" />
+    <trip id="3" depart="3.00" from="17" to="-123" />
+    <trip id="4" depart="4.00" from="123" to="125" />
+</trips>
