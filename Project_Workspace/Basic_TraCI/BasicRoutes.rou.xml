@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<!-- generated on Tue May 16 12:01:19 2017 by SUMO duarouter Version 0.19.0
+<!-- generated on Wed May 17 21:56:01 2017 by SUMO duarouter Version 0.28.0
 <?xml version="1.0" encoding="UTF-8"?>
 
-<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo-sim.org/xsd/duarouterConfiguration.xsd">
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/duarouterConfiguration.xsd">
 
     <input>
         <net-file value="BasicNetwork.net.xml"/>
@@ -21,20 +21,80 @@
 </configuration>
 -->
 
-<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo-sim.org/xsd/routes_file.xsd">
+<routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
     <vehicle id="0" depart="0.00">
-        <route edges="-3 9 19 123 -123"/>
+        <route edges="64 -64 38 -38"/>
     </vehicle>
-    <vehicle id="1" depart="1.00">
-        <route edges="121 -121 -19"/>
+    <vehicle id="1" depart="0.00">
+        <route edges="-13 13 -17"/>
     </vehicle>
-    <vehicle id="2" depart="2.00">
-        <route edges="-125 -19 -9 7"/>
+    <vehicle id="2" depart="0.00">
+        <route edges="19 121 -64 -13 13"/>
     </vehicle>
-    <vehicle id="3" depart="3.00">
-        <route edges="17 64 -121 123 -123"/>
+    <vehicle id="3" depart="0.00">
+        <route edges="19 121 -64 -13 13"/>
     </vehicle>
-    <vehicle id="4" depart="4.00">
-        <route edges="123 -123 125"/>
+    <vehicle id="4" depart="0.00">
+        <route edges="-17 17"/>
+    </vehicle>
+    <vehicle id="5" depart="0.00">
+        <route edges="-117 -15"/>
+    </vehicle>
+    <vehicle id="6" depart="0.00">
+        <route edges="3 13"/>
+    </vehicle>
+    <vehicle id="7" depart="0.00">
+        <route edges="-3 9 19 123"/>
+    </vehicle>
+    <vehicle id="8" depart="0.00">
+        <route edges="-25 -9 9"/>
+    </vehicle>
+    <vehicle id="9" depart="0.00">
+        <route edges="17 -13 15 119"/>
+    </vehicle>
+    <vehicle id="10" depart="0.00">
+        <route edges="-9 3"/>
+    </vehicle>
+    <vehicle id="11" depart="0.00">
+        <route edges="121 -121"/>
+    </vehicle>
+    <vehicle id="12" depart="0.00">
+        <route edges="9 17"/>
+    </vehicle>
+    <vehicle id="13" depart="0.00">
+        <route edges="-3 3 15"/>
+    </vehicle>
+    <vehicle id="14" depart="0.00">
+        <route edges="-3 3 15 117"/>
+    </vehicle>
+    <vehicle id="15" depart="0.00">
+        <route edges="17 -17 25"/>
+    </vehicle>
+    <vehicle id="16" depart="0.00">
+        <route edges="-7 9 -9"/>
+    </vehicle>
+    <vehicle id="17" depart="0.00">
+        <route edges="-38 -13 -3"/>
+    </vehicle>
+    <vehicle id="18" depart="0.00">
+        <route edges="-121 121 -64 -13 -3"/>
+    </vehicle>
+    <vehicle id="19" depart="0.00">
+        <route edges="-15 15 119"/>
+    </vehicle>
+    <vehicle id="20" depart="0.00">
+        <route edges="-117 -15 13 -17 -9"/>
+    </vehicle>
+    <vehicle id="21" depart="0.00">
+        <route edges="-117 -15 13 64 -121 123"/>
+    </vehicle>
+    <vehicle id="22" depart="0.00">
+        <route edges="-121 -19 19"/>
+    </vehicle>
+    <vehicle id="23" depart="0.00">
+        <route edges="19 121 -64 64"/>
+    </vehicle>
+    <vehicle id="24" depart="0.00">
+        <route edges="117 -117 -15 -3 3"/>
     </vehicle>
 </routes>

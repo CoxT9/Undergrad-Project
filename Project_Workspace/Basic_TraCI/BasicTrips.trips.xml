@@ -1,9 +1,31 @@
 <?xml version="1.0"?>
-<!-- generated on 2017-05-16 12:00:03.564893 by $Id: randomTrips.py 14677 2013-09-11 08:30:08Z behrisch $ -->
+<!-- generated on 2017-05-17 21:55:23.575110 by $Id: randomTrips.py 21557 2016-09-28 10:43:52Z luecken $
+  options: -n BasicNetwork.net.xml -e 25
+-->
 <trips>
-    <trip id="0" depart="0.00" from="-3" to="-123" />
-    <trip id="1" depart="1.00" from="121" to="-19" />
-    <trip id="2" depart="2.00" from="-125" to="7" />
-    <trip id="3" depart="3.00" from="17" to="-123" />
-    <trip id="4" depart="4.00" from="123" to="125" />
+    <trip id="0" depart="0.00" from="64" to="-38" />
+    <trip id="1" depart="1.00" from="-13" to="-17" />
+    <trip id="2" depart="2.00" from="19" to="13" />
+    <trip id="3" depart="3.00" from="19" to="13" />
+    <trip id="4" depart="4.00" from="-17" to="17" />
+    <trip id="5" depart="5.00" from="-117" to="-15" />
+    <trip id="6" depart="6.00" from="3" to="13" />
+    <trip id="7" depart="7.00" from="-3" to="123" />
+    <trip id="8" depart="8.00" from="-25" to="9" />
+    <trip id="9" depart="9.00" from="17" to="119" />
+    <trip id="10" depart="10.00" from="-9" to="3" />
+    <trip id="11" depart="11.00" from="121" to="-121" />
+    <trip id="12" depart="12.00" from="9" to="17" />
+    <trip id="13" depart="13.00" from="-3" to="15" />
+    <trip id="14" depart="14.00" from="-3" to="117" />
+    <trip id="15" depart="15.00" from="17" to="25" />
+    <trip id="16" depart="16.00" from="-7" to="-9" />
+    <trip id="17" depart="17.00" from="-38" to="-3" />
+    <trip id="18" depart="18.00" from="-121" to="-3" />
+    <trip id="19" depart="19.00" from="-15" to="119" />
+    <trip id="20" depart="20.00" from="-117" to="-9" />
+    <trip id="21" depart="21.00" from="-117" to="123" />
+    <trip id="22" depart="22.00" from="-121" to="19" />
+    <trip id="23" depart="23.00" from="19" to="64" />
+    <trip id="24" depart="24.00" from="117" to="3" />
 </trips>
