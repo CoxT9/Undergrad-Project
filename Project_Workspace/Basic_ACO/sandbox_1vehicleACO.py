@@ -1,5 +1,5 @@
-# Basic simulation of a single vehicle adhering to simple repellent ACO
-# In normal simulation, target vehicle ("0") took 317 moments to reach dest
+# Basic simulation of a single vehicle adhering to simple ACO
+# In normal simulation, target vehicle ("0") took 500 moments to reach dest
 # This program attempts to use ACO to improve on this metric
 
 # Note that this script was developed very quickly
@@ -31,14 +31,20 @@ def reroute(veh, ph, vis, dest, net, edge):
   outgoing = net.getEdge(edge).getOutgoing()
  
   target = None
-  minPh = 1000000
+  maxPh = 0
   for candidate in outgoing:
-    if candidate not in vis and ph[candidate] < minPh: # grave assume: all paths lead to dest
+    candidate = candidate.getID()
+    print candidate, "IS ONE OF THE CANDS", ph[candidate]
+    if candidate not in vis and ph[candidate] >= maxPh and pathExists(candidate, dest):
       target = candidate
       vis.append(target)
 
   # Set vehicle edge to lowest ph unvisited edge that connects to dest 
-  traci.vehicle.setRoute(edge, target)
+  print "edge, targ", edge, target
+  traci.vehicle.setRoute(veh, [edge, target])
+
+def pathExists(src, dst):
+  return src not in ["319", "330", "588"] 
 
 traci.start(sumoCmd)
 
@@ -51,20 +57,22 @@ print "Executing single-vehicle adherence simulation..."
 traveltime = 0
 interestV = "0"
 visitedEdges = []
+lastEdge = ""
 
 destinationEdge = traci.vehicle.getRoute(interestV)[-1]# This should be translated into the connecting vertex
 traci.simulationStep()
-for i in range(400): # run sim
+for i in range(1000): # run sim
   for v in traci.vehicle.getIDList():
     ph[traci.vehicle.getRoadID(v)] += 1
   
   current = traci.vehicle.getRoadID(interestV)
   print current, destinationEdge
-  if current != destinationEdge:
+  if lastEdge != current and current != destinationEdge:
     reroute(interestV, ph, visitedEdges, destinationEdge, net, current)
+    lastEdge = current
  
   for e in ph:
-    ph[e] -= 1
+    ph[e] = max(ph[e]-1, 0)
 
   traci.simulationStep()
   traveltime += 1
