@@ -1,6 +1,9 @@
 # Basic simulation of a single vehicle adhering to simple ACO
-# In normal simulation, target vehicle ("0") took 500 moments to reach dest
+# In normal simulation, target vehicle ("0") took 495 moments to reach dest
 # This program attempts to use ACO to improve on this metric
+
+# A test run of this script brings the vehicle of interest to its destination in 435 moments - an improvement of 60 moments
+# If anything, this is a successful one-small-step
 
 # Note that this script was developed very quickly
 
@@ -32,20 +35,35 @@ def reroute(veh, ph, vis, dest, net, edge):
  
   target = None
   maxPh = 0
-  for candidate in outgoing:
-    candidate = candidate.getID()
-    print candidate, "IS ONE OF THE CANDS", ph[candidate]
-    if candidate not in vis and ph[candidate] >= maxPh and pathExists(candidate, dest):
-      target = candidate
-      vis.append(target)
+  minPh = 1000000
+
+  outgoingIds = [ i.getID() for i in outgoing ]
+  unvisitedCandidates = [item for item in outgoingIds if item not in vis]
+  validCandidates = [item for item in unvisitedCandidates if pathExists(item, dest, vis, net) or item == dest ]
+  for cand in validCandidates:
+    if ph[cand] < minPh:
+      target = cand
+      minPh = ph[cand]
 
   # Set vehicle edge to lowest ph unvisited edge that connects to dest 
   print "edge, targ", edge, target
+  vis.append(target)
   traci.vehicle.setRoute(veh, [edge, target])
 
-def pathExists(src, dst):
-  return src not in ["319", "330", "588"] 
+def pathExists(src, dst, vis, net):
+  # bfs for src to dst (no loop back)
+  q = [(src, [src])]
+  while q:
+    (curr, path) = q.pop(0)
+    outgoing = [ i.getID() for i in net.getEdge(curr).getOutgoing() ]
+    for out in [item for item in outgoing if item not in path and item not in vis ]:
+      if out == dst:
+        return True
+      else:
+        q.append((out, path + [out]))
 
+  return False
+  
 traci.start(sumoCmd)
 
 ph = {}
@@ -65,17 +83,18 @@ for i in range(1000): # run sim
   for v in traci.vehicle.getIDList():
     ph[traci.vehicle.getRoadID(v)] += 1
   
-  current = traci.vehicle.getRoadID(interestV)
-  print current, destinationEdge
-  if lastEdge != current and current != destinationEdge:
-    reroute(interestV, ph, visitedEdges, destinationEdge, net, current)
-    lastEdge = current
+  if interestV in traci.vehicle.getIDList():
+    traveltime += 1 
+    current = traci.vehicle.getRoadID(interestV)
+    print current, destinationEdge
+    if lastEdge != current and current != destinationEdge:
+      reroute(interestV, ph, visitedEdges, destinationEdge, net, current)
+      lastEdge = current
  
   for e in ph:
     ph[e] = max(ph[e]-1, 0)
 
   traci.simulationStep()
-  traveltime += 1
 
 print "Closing..."
 print "Interest vehicle reached dest in time: ", traveltime
