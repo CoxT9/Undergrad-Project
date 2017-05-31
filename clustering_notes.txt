@@ -1,0 +1,38 @@
+Notes on clustering problems and Ant Brood Clustering:
+
+Clustering (Cluster Analysis) is the process of grouping objects into a sequence of clusters, categorizing by some similarity/ies. Clustering ties into Multi Criteria Analysis because there can be >1 criteria which define cluster membership, or the strength of cluster membership. The most popular classical clustering algorithm is K-means clustering:
+
+- We try to optimize intra-cluster similarity, and optimize inter-cluster dissimilarity
+
+"Partition n observations into k clusters in which each observation belongs to the cluster with the nearest mean, serving as a prototype (model) of the cluster"
+
+ABC (Ant Brood Clustering) is a clustering heuristic that mimicks how ants sort their breeding areas. This is also called Ant Brood Sorting, but it is not a "Sorting" algorithm (it is for Clustering). This behavior was first observed in 1991 by Franks and Sendova-Franks. Many different implementations of ABC exist in the literature. These implementations are generally geared to specific use-cases (ie: option pricing). 
+
+Some questions in cluster formation include (Things to think about when working with ABC):
+ - How many clusters are to be created?
+ - Do clusters have a maximum size?
+ - What is the criteria for cluster admittance, and how strict is the criteria?
+
+Questions for Dr. Thulasiraman:
+
+- What kinds of algs are we looking at?
+- How do we measure performance?
+- What is the performance vs K-means?
+- What did the last student do for their approach?
+
+An interesting application of ABC is VANET, which ties back into MAZACORNET. Question: Is data-clustering similar to VANET clustering?
+Can ABC be used for cluster formation or *zone formation*? ie: Zones end up being geographically close agents with geographically close destinations.
+
+ABC survey: http://www.ijcte.org/papers/242-G730.pdf
+
+"The  probability  of  dropping  an  item  is increased  if  ants  are  surrounded  with  similar  data  in  the neighborhood"
+"the probability of picking an item is increased if a data item is surrounded by dissimilar data, or when  there  is  no  data  in  its  neighborhood"
+
+It may be possible to execute a clustering algorithm for vanet, but it would be A) centralized and B) robust to changes in graph state.
+
+To start: look into what Ziyue Wang is up to for ABC. Read the linked ABC survey. 
+Here is a clustering in VANET survey:
+
+http://ieeexplore.ieee.org.uml.idm.oclc.org/stamp/stamp.jsp?arnumber=7405685
+
+Need to think about whether clustering really does apply to VANET

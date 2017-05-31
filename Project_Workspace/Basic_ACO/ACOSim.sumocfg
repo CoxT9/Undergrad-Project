@@ -9,7 +9,7 @@
 
     <output>
         <vehroute-output.exit-times value="1"/>
-        <vehroute-output value="Logs.txt"/>
+        <vehroute-output value="Logs.out.xml"/>
     </output>
 
     <time>
