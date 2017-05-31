@@ -36,7 +36,9 @@ while len(compliantAgents) < len(agents)/complianceFactor:
 # Run the simulation twice:
 # First run: Gather arrival data on "compliant" members and whole dataset
 # Second run: Actually execute ACO on compliant members and gather same metrics
-subprocess.call(sumoCmd)
+subprocess.call(sumoCmd, stderr = open(os.devnull, 'w'))
+time.sleep(1)
+print ""
 print "Completed execution of non-ACO simulation"
 
 overallAverageTime = 0
@@ -57,3 +59,30 @@ print "Average time for to-be-compliant subset of vehicles (without compliance) 
 # So far this script gathers a percentage of the agent population as "ACO-compliant" agents. 
 # The script then evaluates the average travel-time performance of the whole population and the compliant population,
 # without any usage of ACO so far.
+
+# Next, the simulation will execute with the target population complying to ACO.
+#traci.start(sumoGui)
+
+print format("Launching multi-vehicle-compliance scenario with %s%% population compliance..." % sys.argv[1])
+
+traci.start(sumoGui)
+ph = { value:0 for value in traci.edge.getIDList()}
+
+# Will need keystores for all previously scalar data
+
+for _ in xrange(1000):
+  presentAgents = traci.vehicle.getIDList()
+  for v in presentAgents:
+    ph[traci.vehicle.getRoadID(v)] += 1
+   
+  for compliantV in set(presentAgents).intersection(compliantAgents):
+    # Run ACO system for compliant vehicle
+    currentEdge = traci.vehicle.getRoadID(compliantV)
+    
+  for e in ph:
+    ph[e] = max(ph[e]-1, 0)
+
+  traci.simulationStep()
+
+traci.close(False)
+print "Done." 
