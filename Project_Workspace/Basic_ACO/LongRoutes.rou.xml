@@ -23,7 +23,7 @@
 -->
 
 <routes xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.dlr.de/xsd/routes_file.xsd">
-    <vehicle id="0" depart="0.00" color="1,0,0">
+    <vehicle id="0" depart="0.00">
         <route edges="-608 -332 -119 -15 13 -17 25 210 -620 -569 565 619 665"/>
     </vehicle>
     <vehicle id="777" depart="0.01">

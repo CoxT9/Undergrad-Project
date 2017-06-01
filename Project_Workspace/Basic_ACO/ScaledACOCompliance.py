@@ -11,16 +11,44 @@
 
 import os, sys, time, xml.etree.ElementTree, subprocess
 from random import randint
+from fractions import Fraction
 
 sys.path.append(os.path.join(os.environ["SUMO_HOME"], 'tools'))
 sumoGui = ["/usr/bin/sumo-gui", "-c", "./ACOSim.sumocfg"]
 sumoCmd = ["/usr/bin/sumo", "-c", "./ACOSim.sumocfg"]
 
 import traci, traci.constants, sumolib
-network = sumolib.net.readNet("HighConnectivity.net.xml")
 
-complianceFactor = (float(sys.argv[1])/100).as_integer_ratio()[1] # 1 in complianceFactor agents will be selected
-print complianceFactor
+def reroute(agent, currEdge, visitedEdges, destEdge, network, ph):
+  outgoing = [i.getID() for i in network.getEdge(currEdge).getOutgoing()]
+  
+  unvisitedCandidates = [item for item in outgoing if item not in visitedEdges]
+  validCandidates = [item for item in unvisitedCandidates if pathExists(item, destEdge, visitedEdges, network) or item == destEdge]
+  minPh = 10000000000
+  candidateKeypairs = {key: ph[key] for key in ph if key in validCandidates}
+  if len(candidateKeypairs.keys()) < 1:
+    print agent, currEdge, destEdge, visitedEdges
+  target = min(candidateKeypairs, key=candidateKeypairs.get)
+
+  visitedEdges.append(target)
+  visitedEdges.append(str(int(target)*-1))
+  traci.vehicle.setRoute(agent, [currEdge, target])
+
+def pathExists(srcEdge, destEdge, visitedEdges, network):
+  q = [(srcEdge, [srcEdge])]
+  while q:
+    (curr, path) = q.pop(0)
+    print srcEdge, destEdge, visitedEdges
+    outgoing = [i.getID() for i in network.getEdge(curr).getOutgoing()]
+    for out in [item for item in outgoing if item not in path and item not in visitedEdges]:
+      if out == destEdge:
+        return True
+      else:
+        q.append((out, path + [out]))
+
+  return False
+
+network = sumolib.net.readNet("HighConnectivity.net.xml")
 
 # Collect all compliant vehicle ids:
 e = xml.etree.ElementTree.parse('LongRoutes.rou.xml').getroot()
@@ -28,7 +56,10 @@ i = 1
 compliantAgents = set()
 
 agents = e.findall('vehicle')
-while len(compliantAgents) < len(agents)/complianceFactor:
+complianceTotal = int(len(agents) * (float(sys.argv[1]) / 100) )
+print "Total number of compliant agents:", complianceTotal
+
+while len(compliantAgents) < complianceTotal:
   index = randint(0, len(agents)-1)
   compliantAgents.add(agents[index].get('id'))
 
@@ -67,6 +98,14 @@ print format("Launching multi-vehicle-compliance scenario with %s%% population c
 
 traci.start(sumoGui)
 ph = { value:0 for value in traci.edge.getIDList()}
+visitedEdgesStore = {agent:[] for agent in compliantAgents}
+lastEdgeStore = {agent:"" for agent in compliantAgents}
+destinationEdgeStore = {}
+
+for trip in sumolib.output.parse('ActualTripData.trip.xml', 'trip'):
+  if trip.id in compliantAgents:
+    destinationEdgeStore[trip.id] = trip.to
+    
 
 # Will need keystores for all previously scalar data
 
@@ -74,15 +113,22 @@ for _ in xrange(1000):
   presentAgents = traci.vehicle.getIDList()
   for v in presentAgents:
     ph[traci.vehicle.getRoadID(v)] += 1
-   
   for compliantV in set(presentAgents).intersection(compliantAgents):
+    #print compliantV
+    traci.vehicle.setColor(compliantV, (255, 0, 0, 0))
     # Run ACO system for compliant vehicle
     currentEdge = traci.vehicle.getRoadID(compliantV)
+    
+    if lastEdgeStore[compliantV] != currentEdge and currentEdge != destinationEdgeStore[compliantV]:
+      reroute(compliantV, currentEdge, visitedEdgesStore[compliantV], destinationEdgeStore[compliantV], network, ph)
+      
+      lastEdgeStore[compliantV] = currentEdge
     
   for e in ph:
     ph[e] = max(ph[e]-1, 0)
 
   traci.simulationStep()
+  #print _, "is value"
 
 traci.close(False)
 print "Done." 
