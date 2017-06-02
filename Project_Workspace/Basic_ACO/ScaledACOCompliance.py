@@ -20,20 +20,15 @@ sumoCmd = ["/usr/bin/sumo", "-c", "./ACOSim.sumocfg"]
 import traci, traci.constants, sumolib
 
 def reroute(agent, currEdge, visitedEdges, destEdge, network, ph):
-  #print agent
   outgoing = [i.getID() for i in network.getEdge(currEdge).getOutgoing()]
   unvisitedCandidates = [item for item in outgoing if item not in visitedEdges and str(abs(int(item))) not in visitedEdges]
-  #print unvisitedCandidates
-  validCandidates = [item for item in unvisitedCandidates if str(abs(int(item))) == str(abs(int(destEdge))) or pathExists(item, destEdge, visitedEdges, network)] 
+  if str(abs(int(destEdge))) in [ str(abs(int(item))) for item in unvisitedCandidates]:
+    validCandidates = [ unvisitedCandidates[ [str(abs(int(item))) for item in unvisitedCandidates ].index( str(abs(int(destEdge))))]]
+  else:
+    validCandidates = [item for item in unvisitedCandidates if pathExists(item, destEdge, visitedEdges+[str(int(item)*-1)], network)] 
   minPh = 10000000000
 
   candidateKeypairs = {key: ph[key] for key in ph if key in validCandidates}
-  if len(candidateKeypairs.keys()) < 1:
-    print agent
-    print currEdge
-    print destEdge
-    print unvisitedCandidates
-    print visitedEdges
   target = min(candidateKeypairs, key=candidateKeypairs.get)
 
   visitedEdges.append(target)
@@ -44,7 +39,6 @@ def pathExists(srcEdge, destEdge, visitedEdges, network):
   q = [(srcEdge, [srcEdge])]
   while q:
     (curr, path) = q.pop(0)
-    #print path
     outgoing = [i.getID() for i in network.getEdge(curr).getOutgoing()]
     for out in [item for item in outgoing if str(abs(int(item))) not in set(path) and str(abs(int(item))) not in visitedEdges]:
       if str(abs(int(out))) == str(abs(int(destEdge))):
@@ -53,6 +47,23 @@ def pathExists(srcEdge, destEdge, visitedEdges, network):
         q.append((out, path + [ str(abs(int(out))) ]))
 
   return False
+
+def averages(vehicleCollection, compliantAgents, ttlAgents):
+  overallAverageTime = 0
+  averageCompliantAgentTime = 0
+  for vehicle in vehicleCollection:
+    if vehicle.arrival is None:
+      arrival = 1000000.00
+      print vehicle.id, " Failed to reach destination"
+    else:
+      arrival = float(vehicle.arrival)
+    travelTime = arrival - float(vehicle.depart)
+    if vehicle.id in compliantAgents:
+      averageCompliantAgentTime += travelTime
+
+    overallAverageTime += travelTime
+
+  return overallAverageTime/ttlAgents, averageCompliantAgentTime/len(compliantAgents)
 
 network = sumolib.net.readNet("HighConnectivity.net.xml")
 
@@ -78,22 +89,10 @@ time.sleep(1)
 print ""
 print "Completed execution of non-ACO simulation"
 
-overallAverageTime = 0
-averageCompliantAgentTime = 0
-for vehicle in sumolib.output.parse('Logs.out.xml', 'vehicle'):
-  travelTime = float(vehicle.arrival) - float(vehicle.depart)
-  if vehicle.id in compliantAgents:
-    averageCompliantAgentTime += travelTime
-  
-  overallAverageTime += travelTime
-
-overallAverageTime /= len(agents)
-averageCompliantAgentTime /= len(compliantAgents)
-
+overallAverageTime, averageCompliantAgentTime = averages(sumolib.output.parse('Logs.out.xml', 'vehicle'), compliantAgents, len(agents))
 print "Average time for all vehicles without any ACO compliance is", overallAverageTime
 print compliantAgents
 print "Average time for to-be-compliant subset of vehicles (without compliance) is", averageCompliantAgentTime
-
 # So far this script gathers a percentage of the agent population as "ACO-compliant" agents. 
 # The script then evaluates the average travel-time performance of the whole population and the compliant population,
 # without any usage of ACO so far.
@@ -130,4 +129,12 @@ for _ in xrange(1000):
   traci.simulationStep()
 
 traci.close(False)
-print "Done." 
+print "Done."
+
+# Next, ACO-specific metrics
+print "Dumping metric changes from ACO..."
+overallAverageTime, averageCompliantAgentTime = averages(sumolib.output.parse('Logs.out.xml', 'vehicle'), compliantAgents, len(agents))
+
+print "Overall average travel time: ", overallAverageTime
+print "Average travel time of compliant agents: ", averageCompliantAgentTime
+ 
