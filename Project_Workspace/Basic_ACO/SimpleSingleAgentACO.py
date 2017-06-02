@@ -1,4 +1,4 @@
-###########################################################################################################################################
+#(['103', '777', '137'###########################################################################################################################################
 ### A simple script which runs a SUMO simulation where 1 vehicle complies to a very basic repellent-ACO system
 ### Without R-ACO, the vehicle ("0") completes its route in 494 moments.
 ### With R-ACO, the vehicle completes its route in approximately 425 moments.
@@ -57,9 +57,12 @@ def pathExists(srcEdge, destEdge, visitedEdges, network):
 ###########################################################################################################################################
 
 traveltime = 0
-interestV = "0"
+interestV = "777"
 visitedEdges = []
 lastEdge = ""
+while interestV not in traci.vehicle.getIDList():
+  traci.simulationStep()
+
 destinationEdge = traci.vehicle.getRoute(interestV)[-1]
 
 print "Launching single-vehicle-compliance scenario..."

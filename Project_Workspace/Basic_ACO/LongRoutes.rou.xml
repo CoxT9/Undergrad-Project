@@ -401,9 +401,6 @@
     <vehicle id="128" depart="5.12">
         <route edges="-582 -534 -388 -362 -128 -25 17 38 -117"/>
     </vehicle>
-    <vehicle id="129" depart="5.16">
-        <route edges="-126 128 362 388 534"/>
-    </vehicle>
     <vehicle id="130" depart="5.20">
         <route edges="-313 -38 -17 25 210 -620 -569 581"/>
     </vehicle>

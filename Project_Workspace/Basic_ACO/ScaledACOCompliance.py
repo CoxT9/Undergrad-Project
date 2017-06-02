@@ -1,4 +1,4 @@
-# This is a python script which executes the simple repellent-ACO system against an input road network.
+#'278', '280', '230'])# This is a python script which executes the simple repellent-ACO system against an input road network.
 # This script attempts to improve the following metrics:
 # - Average overall travel time
 # - Average travel time of participating/compliant vehicles.
@@ -9,7 +9,7 @@
 
 # Note that there are 385 vehicles in the current simple dataset
 
-import os, sys, time, xml.etree.ElementTree, subprocess
+import os, sys, time, xml.etree.ElementTree, subprocess, math
 from random import randint
 from fractions import Fraction
 
@@ -20,14 +20,20 @@ sumoCmd = ["/usr/bin/sumo", "-c", "./ACOSim.sumocfg"]
 import traci, traci.constants, sumolib
 
 def reroute(agent, currEdge, visitedEdges, destEdge, network, ph):
+  #print agent
   outgoing = [i.getID() for i in network.getEdge(currEdge).getOutgoing()]
-  
-  unvisitedCandidates = [item for item in outgoing if item not in visitedEdges]
-  validCandidates = [item for item in unvisitedCandidates if pathExists(item, destEdge, visitedEdges, network) or item == destEdge]
+  unvisitedCandidates = [item for item in outgoing if item not in visitedEdges and str(abs(int(item))) not in visitedEdges]
+  #print unvisitedCandidates
+  validCandidates = [item for item in unvisitedCandidates if str(abs(int(item))) == str(abs(int(destEdge))) or pathExists(item, destEdge, visitedEdges, network)] 
   minPh = 10000000000
+
   candidateKeypairs = {key: ph[key] for key in ph if key in validCandidates}
   if len(candidateKeypairs.keys()) < 1:
-    print agent, currEdge, destEdge, visitedEdges
+    print agent
+    print currEdge
+    print destEdge
+    print unvisitedCandidates
+    print visitedEdges
   target = min(candidateKeypairs, key=candidateKeypairs.get)
 
   visitedEdges.append(target)
@@ -38,13 +44,13 @@ def pathExists(srcEdge, destEdge, visitedEdges, network):
   q = [(srcEdge, [srcEdge])]
   while q:
     (curr, path) = q.pop(0)
-    print srcEdge, destEdge, visitedEdges
+    #print path
     outgoing = [i.getID() for i in network.getEdge(curr).getOutgoing()]
-    for out in [item for item in outgoing if item not in path and item not in visitedEdges]:
-      if out == destEdge:
+    for out in [item for item in outgoing if str(abs(int(item))) not in set(path) and str(abs(int(item))) not in visitedEdges]:
+      if str(abs(int(out))) == str(abs(int(destEdge))):
         return True
       else:
-        q.append((out, path + [out]))
+        q.append((out, path + [ str(abs(int(out))) ]))
 
   return False
 
@@ -85,17 +91,14 @@ overallAverageTime /= len(agents)
 averageCompliantAgentTime /= len(compliantAgents)
 
 print "Average time for all vehicles without any ACO compliance is", overallAverageTime
+print compliantAgents
 print "Average time for to-be-compliant subset of vehicles (without compliance) is", averageCompliantAgentTime
 
 # So far this script gathers a percentage of the agent population as "ACO-compliant" agents. 
 # The script then evaluates the average travel-time performance of the whole population and the compliant population,
 # without any usage of ACO so far.
-
 # Next, the simulation will execute with the target population complying to ACO.
-#traci.start(sumoGui)
-
 print format("Launching multi-vehicle-compliance scenario with %s%% population compliance..." % sys.argv[1])
-
 traci.start(sumoGui)
 ph = { value:0 for value in traci.edge.getIDList()}
 visitedEdgesStore = {agent:[] for agent in compliantAgents}
@@ -104,7 +107,7 @@ destinationEdgeStore = {}
 
 for trip in sumolib.output.parse('ActualTripData.trip.xml', 'trip'):
   if trip.id in compliantAgents:
-    destinationEdgeStore[trip.id] = trip.to
+    destinationEdgeStore[trip.id] = str( abs( int(trip.to)))
     
 
 # Will need keystores for all previously scalar data
@@ -114,21 +117,17 @@ for _ in xrange(1000):
   for v in presentAgents:
     ph[traci.vehicle.getRoadID(v)] += 1
   for compliantV in set(presentAgents).intersection(compliantAgents):
-    #print compliantV
     traci.vehicle.setColor(compliantV, (255, 0, 0, 0))
     # Run ACO system for compliant vehicle
     currentEdge = traci.vehicle.getRoadID(compliantV)
-    
-    if lastEdgeStore[compliantV] != currentEdge and currentEdge != destinationEdgeStore[compliantV]:
+    if lastEdgeStore[compliantV] != currentEdge and str( abs( int( currentEdge))) != destinationEdgeStore[compliantV]:
       reroute(compliantV, currentEdge, visitedEdgesStore[compliantV], destinationEdgeStore[compliantV], network, ph)
-      
       lastEdgeStore[compliantV] = currentEdge
     
   for e in ph:
     ph[e] = max(ph[e]-1, 0)
 
   traci.simulationStep()
-  #print _, "is value"
 
 traci.close(False)
 print "Done." 
