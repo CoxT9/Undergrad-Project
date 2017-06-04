@@ -35,4 +35,32 @@ Here is a clustering in VANET survey:
 
 http://ieeexplore.ieee.org.uml.idm.oclc.org/stamp/stamp.jsp?arnumber=7405685
 
-Need to think about whether clustering really does apply to VANET
+Need to think about whether clustering really does apply to VANET: It is not clear whether this is true.
+
+Some papers such as "Adaptive K Harmonic Means for VANET Clustering" seem to establish a link between clustering as 'unsupervised learning' and clustering as a hierarchical routing protocol. It appears that basic networks (non mobile, non vehicular) use traditional clustering for cluster-formating algorithms. One such technique is 'Label Propgoation', which is a semi-supervised technique.
+
+Clustering and Zone-formation questions (after reviewing MAZACORNET again):
+How are zones formed in MAZACORNET? Manual process?
+It is mentioned that the algorithm scales well at >4 zones. How was this discovered?
+All vehicles belong to 1 or 2 (overlapping) zones. How can zones be formed to accomidate this?
+Zones vs clusters. Diff: no head. Similar concept -> pseudohierarchical routing
+
+
+Route planning Repellent-ACO questions (after reviewing IACO-2014):
+What is the necessity of the 2-phase approach? A 'simple' dijkstra doesn't really need to be present if the cost = distance + ph.
+-> gradual increase as opposed to rapid (current demo)
+-> need to be efficient but robust to circumstantial incidents
+-> need to control impact factor of past ph levels (is this congestion a trend or circumstantial?)
+
+- Discuss why this paper is more significant than MACO
+- Next steps: Improve the demo script in terms of programming practice, and improve the metrics (try to emulate techniques described in IACO)
+- Note that all metrics seem to approve with increased compliance population
+
+Demo script:
+Runs successfully with and without ACO, can tweak compliance.
+Very simple code, very simple ACO production and evaporation systems.
+Howver, already some results: Small population compliance has improvement
+Also some odd congestion behavior on specific junctions
+The algorithm also hangs sometimes when trying to see if a path exists (again, the whole thing is very simplistic)
+Some agents also fail to reach destination, likely due to the junction issue.
+- Need to find reproducable instances of improvement

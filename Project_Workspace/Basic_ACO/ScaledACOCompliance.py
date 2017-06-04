@@ -1,4 +1,4 @@
-#'278', '280', '230'])# This is a python script which executes the simple repellent-ACO system against an input road network.
+#This is a python script which executes the simple repellent-ACO system against an input road network.
 # This script attempts to improve the following metrics:
 # - Average overall travel time
 # - Average travel time of participating/compliant vehicles.
@@ -9,15 +9,6 @@
 
 # Note that there are 385 vehicles in the current simple dataset
 
-import os, sys, time, xml.etree.ElementTree, subprocess, math
-from random import randint
-from fractions import Fraction
-
-sys.path.append(os.path.join(os.environ["SUMO_HOME"], 'tools'))
-sumoGui = ["/usr/bin/sumo-gui", "-c", "./ACOSim.sumocfg"]
-sumoCmd = ["/usr/bin/sumo", "-c", "./ACOSim.sumocfg"]
-
-import traci, traci.constants, sumolib
 
 def reroute(agent, currEdge, visitedEdges, destEdge, network, ph):
   outgoing = [i.getID() for i in network.getEdge(currEdge).getOutgoing()]
@@ -65,6 +56,15 @@ def averages(vehicleCollection, compliantAgents, ttlAgents):
 
   return overallAverageTime/ttlAgents, averageCompliantAgentTime/len(compliantAgents)
 
+import os, sys, time, xml.etree.ElementTree, subprocess, math
+from random import randint
+from fractions import Fraction
+
+sys.path.append(os.path.join(os.environ["SUMO_HOME"], 'tools'))
+sumoGui = ["/usr/bin/sumo-gui", "-c", "./ACOSim.sumocfg"]
+sumoCmd = ["/usr/bin/sumo", "-c", "./ACOSim.sumocfg"]
+
+import traci, traci.constants, sumolib
 network = sumolib.net.readNet("HighConnectivity.net.xml")
 
 # Collect all compliant vehicle ids:
