@@ -1,50 +1,98 @@
-#This is a python script which executes the simple repellent-ACO system against an input road network.
-# This script attempts to improve the following metrics:
-# - Average overall travel time
-# - Average travel time of participating/compliant vehicles.
-# Travel time means "moments to desination"
+"""
+A script to demo the performance of a very basic repellent-ACO system scaled to multiple vehicles.
+The script tracks the following metrics, doing so with and without ACO in effect:
+- Moments to destination for all vehicles
+- Moments to destination for compliant vehicles
 
-# When the compliance to ACO is scaled, it must be noted that the entrances of vehicles is staggered (for realism and performance purposes)
-# This program takes one argument: The percentage of vehicles which will comply to the simple repellent-ACO system
+Some sample populations which show a performance improvement in compliant agents and total agents (when using ActualTripData.trip.xml)
+- 164, 199, 127
+- 347, 320, 329, 207, 150
 
-# Note that there are 385 vehicles in the current simple dataset
+Sample that shows overall increase but compliant-population decrease (in terms of performance):
+- 27, 59, 181, 89, 82, 359
 
+Noted behavior of current script and datasets: 
+Larger ACO-compliant population tends to grow overall performance marginally, but causes performance decrease for compliant members.
 
+Currently, the script seems to underperform because of the following reasons:
+A) Pheromone evaporation optimization missing
+B) Pheromone production optimization missing
+C) Multicriteria optimization between route length and pheromone missing
+
+In terms of python performance: There is a lot of room for parallelism in the independent routing phase.
+
+Arguments:
+  - Percentage, an integer 1 < n < 100 identifying the percentage of agents to comply with ACO
+
+"""
+##################################################################################################################################
+################################################## CONSTANTS & IMPORTS ###########################################################
+##################################################################################################################################
+
+CONFIG = "./ACOSim.sumocfg"
+NETWORK = "HighConnectivity.net.xml"
+ROUTES = "LongRoutes.rou.xml" # "RoutesDataset2.rou.xml"
+LOGS = "Logs.out.xml"
+TRIPS = "ActualTripData.trip.xml" # "TripDataset2.trip.xml"
+
+BIG_NUM = 10000000000
+
+import os, sys, time, xml.etree.ElementTree, subprocess, math
+from random import randint
+from fractions import Fraction
+
+sys.path.append(os.path.join(os.environ["SUMO_HOME"], 'tools'))
+sumoGui = ["/usr/bin/sumo-gui", "-c", CONFIG]
+sumoCmd = ["/usr/bin/sumo", "-c", CONFIG]
+
+import traci, traci.constants, sumolib
+
+##################################################################################################################################
+####################################################### FUNCTIONS ################################################################
+##################################################################################################################################
+
+""" Route @agent from @currEdge to the lowest-@ph unvisited edge in 
+@network which contains a path to @destEdge not covering @visitedEdges """
 def reroute(agent, currEdge, visitedEdges, destEdge, network, ph):
   outgoing = [i.getID() for i in network.getEdge(currEdge).getOutgoing()]
-  unvisitedCandidates = [item for item in outgoing if item not in visitedEdges and str(abs(int(item))) not in visitedEdges]
-  if str(abs(int(destEdge))) in [ str(abs(int(item))) for item in unvisitedCandidates]:
-    validCandidates = [ unvisitedCandidates[ [str(abs(int(item))) for item in unvisitedCandidates ].index( str(abs(int(destEdge))))]]
+  unvisitedCandidates = [item for item in outgoing if item not in visitedEdges and unsigned(item) not in visitedEdges]
+  if unsigned(destEdge) in [ unsigned(item) for item in unvisitedCandidates]:
+    validCandidates = [ unvisitedCandidates[ [unsigned(item) for item in unvisitedCandidates ].index( unsigned(destEdge) ) ]]
   else:
-    validCandidates = [item for item in unvisitedCandidates if pathExists(item, destEdge, visitedEdges+[str(int(item)*-1)], network)] 
-  minPh = 10000000000
+    validCandidates = [item for item in unvisitedCandidates if pathExists(item, destEdge, visitedEdges+[flipsign(item)], network)] 
+  minPh = BIG_NUM
 
   candidateKeypairs = {key: ph[key] for key in ph if key in validCandidates}
   target = min(candidateKeypairs, key=candidateKeypairs.get)
 
   visitedEdges.append(target)
-  visitedEdges.append(str(int(target)*-1))
+  visitedEdges.append(flipsign(target))
   traci.vehicle.setRoute(agent, [currEdge, target])
 
+""" Check if a path exists in @network between @srcEdge and @destEdge that does not include @visitedEdges """
 def pathExists(srcEdge, destEdge, visitedEdges, network):
   q = [(srcEdge, [srcEdge])]
   while q:
     (curr, path) = q.pop(0)
     outgoing = [i.getID() for i in network.getEdge(curr).getOutgoing()]
-    for out in [item for item in outgoing if str(abs(int(item))) not in set(path) and str(abs(int(item))) not in visitedEdges]:
-      if str(abs(int(out))) == str(abs(int(destEdge))):
+    for out in [item for item in outgoing if unsigned(item) not in set(path) and unsigned(item) not in visitedEdges]:
+      if unsigned(out) == unsigned(destEdge):
         return True
       else:
-        q.append((out, path + [ str(abs(int(out))) ]))
+        q.append((out, path + [ unsigned(out) ]))
 
   return False
 
-def averages(vehicleCollection, compliantAgents, ttlAgents):
+""" Find the average moments to destination for @universalAgents and @compliantAgents """
+def averages(universalAgents, compliantAgents):
+  totalAgents = len(universalAgents)
+  totalCompl = len(compliantAgents)
   overallAverageTime = 0
   averageCompliantAgentTime = 0
-  for vehicle in vehicleCollection:
+
+  for vehicle in universalAgents:
+    arrival = float(BIG_NUM)
     if vehicle.arrival is None:
-      arrival = 1000000.00
       print vehicle.id, " Failed to reach destination"
     else:
       arrival = float(vehicle.arrival)
@@ -54,75 +102,65 @@ def averages(vehicleCollection, compliantAgents, ttlAgents):
 
     overallAverageTime += travelTime
 
-  return overallAverageTime/ttlAgents, averageCompliantAgentTime/len(compliantAgents)
+  return overallAverageTime/totalAgents, averageCompliantAgentTime/totalCompl
 
-import os, sys, time, xml.etree.ElementTree, subprocess, math
-from random import randint
-from fractions import Fraction
+def unsigned(identifier):
+  return str(abs(int(identifier)))
 
-sys.path.append(os.path.join(os.environ["SUMO_HOME"], 'tools'))
-sumoGui = ["/usr/bin/sumo-gui", "-c", "./ACOSim.sumocfg"]
-sumoCmd = ["/usr/bin/sumo", "-c", "./ACOSim.sumocfg"]
+def flipsign(identifier):
+  return str(int(identifier)*-1)
 
-import traci, traci.constants, sumolib
-network = sumolib.net.readNet("HighConnectivity.net.xml")
+##################################################################################################################################
+######################################################## SETUP ###################################################################
+##################################################################################################################################
+starttime = time.time()
+complianceFactor = float(sys.argv[1])
 
-# Collect all compliant vehicle ids:
-e = xml.etree.ElementTree.parse('LongRoutes.rou.xml').getroot()
-i = 1
-compliantAgents = set()
+network = sumolib.net.readNet(NETWORK)
+agents = xml.etree.ElementTree.parse(ROUTES).getroot().findall('vehicle')
 
-agents = e.findall('vehicle')
-complianceTotal = int(len(agents) * (float(sys.argv[1]) / 100) )
+complianceTotal = int(len(agents) * (complianceFactor / 100) )
 print "Total number of compliant agents:", complianceTotal
+print "Total agents in the dataset:", len(agents)
 
+compliantAgents = set()
 while len(compliantAgents) < complianceTotal:
   index = randint(0, len(agents)-1)
   compliantAgents.add(agents[index].get('id'))
 
-# We now have a collection of x % of all agents which will be compliant to the ACO system.
-# Run the simulation twice:
-# First run: Gather arrival data on "compliant" members and whole dataset
-# Second run: Actually execute ACO on compliant members and gather same metrics
 subprocess.call(sumoCmd, stderr = open(os.devnull, 'w'))
-time.sleep(1)
-print ""
-print "Completed execution of non-ACO simulation"
+print "\nCompleted execution of non-ACO simulation"
 
-overallAverageTime, averageCompliantAgentTime = averages(sumolib.output.parse('Logs.out.xml', 'vehicle'), compliantAgents, len(agents))
-print "Average time for all vehicles without any ACO compliance is", overallAverageTime
-print compliantAgents
-print "Average time for to-be-compliant subset of vehicles (without compliance) is", averageCompliantAgentTime
-# So far this script gathers a percentage of the agent population as "ACO-compliant" agents. 
-# The script then evaluates the average travel-time performance of the whole population and the compliant population,
-# without any usage of ACO so far.
-# Next, the simulation will execute with the target population complying to ACO.
-print format("Launching multi-vehicle-compliance scenario with %s%% population compliance..." % sys.argv[1])
+overallAverageTime, averageCompliantAgentTime = averages(list(sumolib.output.parse(LOGS, 'vehicle')), compliantAgents)
+print "IDs of agents complying to ACO: ", ', '.join(compliantAgents)
+print "PRE-ACO: Overall average time: ", overallAverageTime
+print "PRE-ACO: Average time of compliant subset: ", averageCompliantAgentTime
+print "Launching simple ACO simulation..."
+
+##################################################################################################################################
+###################################################### EXECUTION #################################################################
+##################################################################################################################################
+
 traci.start(sumoGui)
-ph = { value:0 for value in traci.edge.getIDList()}
+
+ph = {value:0 for value in traci.edge.getIDList()}
 visitedEdgesStore = {agent:[] for agent in compliantAgents}
 lastEdgeStore = {agent:"" for agent in compliantAgents}
-destinationEdgeStore = {}
-
-for trip in sumolib.output.parse('ActualTripData.trip.xml', 'trip'):
-  if trip.id in compliantAgents:
-    destinationEdgeStore[trip.id] = str( abs( int(trip.to)))
-    
-
-# Will need keystores for all previously scalar data
+destinationEdgeStore = {trip.id:unsigned(trip.to) for trip in sumolib.output.parse(TRIPS, 'trip') if trip.id in compliantAgents}
 
 for _ in xrange(1000):
   presentAgents = traci.vehicle.getIDList()
   for v in presentAgents:
     ph[traci.vehicle.getRoadID(v)] += 1
+
   for compliantV in set(presentAgents).intersection(compliantAgents):
     traci.vehicle.setColor(compliantV, (255, 0, 0, 0))
-    # Run ACO system for compliant vehicle
+
     currentEdge = traci.vehicle.getRoadID(compliantV)
-    if lastEdgeStore[compliantV] != currentEdge and str( abs( int( currentEdge))) != destinationEdgeStore[compliantV]:
+    if lastEdgeStore[compliantV] != currentEdge and unsigned(currentEdge) != destinationEdgeStore[compliantV]:
       reroute(compliantV, currentEdge, visitedEdgesStore[compliantV], destinationEdgeStore[compliantV], network, ph)
       lastEdgeStore[compliantV] = currentEdge
-    
+
   for e in ph:
     ph[e] = max(ph[e]-1, 0)
 
@@ -131,10 +169,9 @@ for _ in xrange(1000):
 traci.close(False)
 print "Done."
 
-# Next, ACO-specific metrics
 print "Dumping metric changes from ACO..."
-overallAverageTime, averageCompliantAgentTime = averages(sumolib.output.parse('Logs.out.xml', 'vehicle'), compliantAgents, len(agents))
+overallAverageTime, averageCompliantAgentTime = averages(list(sumolib.output.parse(LOGS, 'vehicle')), compliantAgents)
 
 print "Overall average travel time: ", overallAverageTime
 print "Average travel time of compliant agents: ", averageCompliantAgentTime
- 
+print format("Execution completed in %f seconds." % (time.time() - starttime))
