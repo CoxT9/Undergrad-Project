@@ -16,7 +16,7 @@ Larger ACO-compliant population tends to grow overall performance marginally, bu
 
 Currently, the script seems to underperform because of the following reasons:
 A) Pheromone evaporation optimization missing
-B) Pheromone production optimization missing
+B) Pheromone deposit optimization missing
 C) Multicriteria optimization between route length and pheromone missing
 
 In terms of python performance: There is a lot of room for parallelism in the independent routing phase.
@@ -41,7 +41,6 @@ import os, sys, time, xml.etree.ElementTree, subprocess, math
 from random import randint
 from fractions import Fraction
 
-sys.path.append(os.path.join(os.environ["SUMO_HOME"], 'tools'))
 sumoGui = ["/usr/bin/sumo-gui", "-c", CONFIG]
 sumoCmd = ["/usr/bin/sumo", "-c", CONFIG]
 
@@ -134,7 +133,7 @@ print "\nCompleted execution of non-ACO simulation"
 overallAverageTime, averageCompliantAgentTime = averages(list(sumolib.output.parse(LOGS, 'vehicle')), compliantAgents)
 print "IDs of agents complying to ACO: ", ', '.join(compliantAgents)
 print "PRE-ACO: Overall average time: ", overallAverageTime
-print "PRE-ACO: Average time of compliant subset: ", averageCompliantAgentTime
+print "PRE-ACO: Average time of compliant agents: ", averageCompliantAgentTime
 print "Launching simple ACO simulation..."
 
 ##################################################################################################################################
@@ -172,6 +171,6 @@ print "Done."
 print "Dumping metric changes from ACO..."
 overallAverageTime, averageCompliantAgentTime = averages(list(sumolib.output.parse(LOGS, 'vehicle')), compliantAgents)
 
-print "Overall average travel time: ", overallAverageTime
-print "Average travel time of compliant agents: ", averageCompliantAgentTime
+print "WITH-ACO: Overall average time: ", overallAverageTime
+print "WITH-ACO Average time of compliant agents: ", averageCompliantAgentTime
 print format("Execution completed in %f seconds." % (time.time() - starttime))
