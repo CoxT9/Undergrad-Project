@@ -61,7 +61,7 @@ import time
 import traci
 import xml.etree.ElementTree
 
-BIG_NUM = 10000000000
+BIG_NUM = 1000
 RED = (255, 0, 0, 0)
 
 ##################################################################################################################################
@@ -89,6 +89,23 @@ def reroute(agent, currEdge, network, ph):
   visitedEdges.append(flipsign(target))
   traci.vehicle.setRoute(agent.agentid, [currEdge, target])
 
+""" Route @agent from @currEdge to @agent.destinationEdge using the lowest cost path. Cost here is distance + ph """
+def rerouteLowestCost(agent, currEdge, network, ph):
+  visitedEdges = agent.visitedEdges
+  destEdge = agent.destinationEdge
+
+  outgoing = [i.getID() for i in network.getEdge(currEdge).getOutgoing()]
+  unvisitedCandidates = [item for item in outgoing if item not in visitedEdges and unsigned(item) not in visitedEdges]
+
+  if unsigned(destEdge) in [ unsigned(item) for item in unvisitedCandidates]:
+    validCandidates = [ unvisitedCandidates[ [unsigned(item) for item in unvisitedCandidates ].index( unsigned(destEdge) ) ]]
+  else: # fix to extract paths
+    validCandidates = [item for item in unvisitedCandidates if pathExists(item, destEdge, visitedEdges+[flipsign(item)], network)]
+
+  # VC will be either an array containing just the unsigned destination, or the same with other elements preceeding it
+  # for now: minimize on the ph of path[0]
+
+
 """ Check if a path exists in @network between @srcEdge and @destEdge that does not include @visitedEdges """
 def pathExists(srcEdge, destEdge, visitedEdges, network):
   q = [(srcEdge, [srcEdge])]
@@ -101,7 +118,7 @@ def pathExists(srcEdge, destEdge, visitedEdges, network):
       else:
         q.append((out, path + [ unsigned(out) ]))
 
-  return False
+  return None
 
 """ Find the average moments to destination for @universalAgents and @compliantAgents """
 def averages(universalAgents, compliantAgents):
@@ -113,7 +130,7 @@ def averages(universalAgents, compliantAgents):
   for vehicle in universalAgents:
     arrival = float(BIG_NUM)
     if vehicle.arrival is None:
-      print vehicle.id, " Failed to reach destination"
+      print vehicle.id, "Failed to reach destination"
     else:
       arrival = float(vehicle.arrival)
     travelTime = arrival - float(vehicle.depart)
