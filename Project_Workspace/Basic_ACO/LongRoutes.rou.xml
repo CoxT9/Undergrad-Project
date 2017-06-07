@@ -47,9 +47,6 @@
     <vehicle id="7" depart="0.28">
         <route edges="-624 -569 565 619 653"/>
     </vehicle>
-    <vehicle id="8" depart="0.32">
-        <route edges="396 -584 -536 -401 -375 -7 3 15 119 332 608"/>
-    </vehicle>
     <vehicle id="9" depart="0.36">
         <route edges="-790 -125 -19 -9 11 423"/>
     </vehicle>

@@ -47,10 +47,11 @@ class SumoConfigWrapper(object):
     return network, routes, logfile, endtime
 
 ##################################################################################################################################
-################################################### SETUP AND LAUNCH #############################################################
+###################################################### SETUP #####################################################################
 ##################################################################################################################################
 from fractions import Fraction
 from random import randint
+import copy
 import math
 import os
 import subprocess
@@ -62,14 +63,6 @@ import xml.etree.ElementTree
 
 BIG_NUM = 10000000000
 RED = (255, 0, 0, 0)
-
-if __name__ == "__main__":
-  starttime = time.time()
-  main()
-  print "Execution completed in %f seconds." % (time.time() - starttime)
-else:
-  print __name__
-  exit(0)
 
 ##################################################################################################################################
 ####################################################### FUNCTIONS ################################################################
@@ -173,10 +166,11 @@ def getParticipatingAgents(complianceFactor, routefile):
     index = randint(0, len(agents)-1)
     compliantAgents[agents[index].id] = Agent(agents[index].id)
 
+  print "IDs of participating agents:", compliantAgents.keys()
   return compliantAgents
 
-""" Launch the actual simulation """
-def execute(compliantAgents, config, startCommand):
+""" Launch the simulation in the simplest way as a proof-of-concept """
+def executeSimple(compliantAgents, config, startCommand):
   network = sumolib.net.readNet(config.networkfile)
   traci.start(startCommand)
   ph = {value:0 for value in traci.edge.getIDList()}
@@ -214,6 +208,48 @@ def execute(compliantAgents, config, startCommand):
   print "\nDone."
   return ACOMetrics(*averages(sumolist(config.logfile), compliantAgents))
 
+""" Launch the simulation with the following optimizations:
+ - Pheromone deposit and evaporation optimized
+ - Reroute triggers a full reroute to destination, not a single edge
+ - Reroute finds the shortest path considering a balance of distance and density
+ - Reroute only triggers if density of route exceeds a threshold
+"""
+def executeOptimized(compliantAgents, config, startCommand):
+  network = sumolib.net.readNet(config.networkfile)
+  traci.start(startCommand)
+  ph = {value:0 for value in traci.edge.getIDList()}
+
+  for trip in getTrips(config.routefile):
+    if trip.agent in compliantAgents:
+      compliantAgents[trip.agent].destinationEdge = unsigned(trip.dest)
+
+  print "Launching ACO simulation..."
+  for _ in xrange(int(config.endtime)):
+    presentAgents = traci.vehicle.getIDList()
+    
+    for e in ph:
+      ph[e] = int(traci.edge.getLastStepVehicleNumber(e))
+
+    for compliantV in set(presentAgents).intersection(compliantAgents):
+      traci.vehicle.setColor(compliantV, RED)
+
+      currentEdge = traci.vehicle.getRoadID(compliantV)
+      if compliantAgents[compliantV].lastEdge != currentEdge and unsigned(currentEdge) != compliantAgents[compliantV].destinationEdge:
+        reroute(
+          compliantAgents[compliantV], 
+          currentEdge, 
+          network, 
+          ph
+        )
+        compliantAgents[compliantV].lastEdge = currentEdge
+
+    traci.simulationStep()
+
+  traci.close(False)
+  time.sleep(1)
+  print "\nDone."
+  return ACOMetrics(*averages(sumolist(config.logfile), compliantAgents))
+
 """ Setup and benchmarking """
 def main():
   complianceFactor, config, gui = parseArgs()
@@ -225,10 +261,26 @@ def main():
   sumoCmd = ["/usr/bin/sumo", "-c", config]
 
   subprocess.call(sumoCmd, stderr = open(os.devnull, 'w'))
+  print "\n"
   benchmarkResults = ACOMetrics(*averages(sumolist(configPaths.logfile), compliantAgents))
   benchmarkResults.dumpMetrics()
 
-  simulationResults = execute(compliantAgents, configPaths, sumoGui if gui else sumoCmd)
-
-  print "Dumping metrics changes from ACO..."
+  simulationResults = executeSimple(copy.deepcopy(compliantAgents), configPaths, sumoGui if gui else sumoCmd)
+  print "Dumping metrics changes from simple ACO..."
   simulationResults.dumpMetrics()
+
+  simulationResults = executeOptimized(copy.deepcopy(compliantAgents), configPaths, sumoGui if gui else sumoCmd)
+  print "Dumping metrics changes from optimized (ph) ACO..."
+  simulationResults.dumpMetrics()
+
+##################################################################################################################################
+####################################################### LAUNCH ###################################################################
+##################################################################################################################################
+
+if __name__ == "__main__":
+  starttime = time.time()
+  main()
+  print "Execution completed in %f seconds." % (time.time() - starttime)
+else:
+  print __name__
+  exit(0)
