@@ -8,6 +8,19 @@ Arguments:
   - Percentage, an integer 1 < n < 100 identifying the percentage of agents to comply with ACO
   - Config File, the path to a .sumocfg file which containts necessary information about the simulation
   - A 0 or 1, indicating whether the simulation will run with the GUI (1 for GUI)
+
+  Next steps for the threshold-reroute model:
+  - Investigate pheromone deposit and evaporation mechanisms
+  - Tweak criteria for dijkstra based on what SUMO/TraCI provides (travltime? effort?)
+  - Consider how to incorporate velocity into density model
+  - Tweak threshold for acceptable congestion rates
+
+  Next steps for project overall:
+  - Tackle odd junction deadlock issue
+
+  Next model:
+  - Look at Multipath routing. Backup paths? User-choice?
+  - Complete readings on this matter and look into implementation for week of June 12
 """
 ##################################################################################################################################
 ####################################################### CLASSES ##################################################################
@@ -19,11 +32,14 @@ class Trip(object):
     self.dest = dest
 
 class Agent(object):
-  def __init__(self, agentid, visitedEdges=None, lastEdge=None, destinationEdge=None):
+  def __init__(self, agentid, visitedEdges=None, lastEdge=None, destinationEdge=None, destination=None, source=None):
     self.agentid = agentid
     self.visitedEdges = visitedEdges if visitedEdges else []
     self.lastEdge = lastEdge if lastEdge else ""
     self.destinationEdge = destinationEdge if destinationEdge else ""
+    self.destination = destination if destination else ""
+    self.source = source if source else ""
+
 
 class ACOMetrics(object):
   def __init__(self, averageCompliantAgentTime, overallAverageTime):
@@ -62,6 +78,8 @@ import traci
 import xml.etree.ElementTree
 
 BIG_NUM = 1000
+PH_THRESHOLD = 50
+EVAP_RATE = .08
 RED = (255, 0, 0, 0)
 
 ##################################################################################################################################
@@ -74,11 +92,11 @@ def reroute(agent, currEdge, network, ph):
   destEdge = agent.destinationEdge
 
   outgoing = [i.getID() for i in network.getEdge(currEdge).getOutgoing()]
-  unvisitedCandidates = [item for item in outgoing if item not in visitedEdges and unsigned(item) not in visitedEdges]
+  unvisitedCandidates = [item for item in outgoing if item not in visitedEdges and flipsign(item) not in visitedEdges]
 
   validCandidates = []
   i = 0
-  while destEdge not in validCandidates and unsigned(destEdge) not in validCandidates and i < len(unvisitedCandidates):
+  while destEdge not in validCandidates and flipsign(destEdge) not in validCandidates and i < len(unvisitedCandidates):
     if pathExists(unvisitedCandidates[i], destEdge, visitedEdges+[flipsign(unvisitedCandidates[i])], network):
       validCandidates.append(unvisitedCandidates[i])
     i += 1
@@ -94,18 +112,90 @@ def reroute(agent, currEdge, network, ph):
   visitedEdges.append(flipsign(target))
   traci.vehicle.setRoute(agent.agentid, [currEdge, target])
 
-""" Route @agent from @currEdge to @agent.destinationEdge using the lowest cost path. Cost here is distance + ph """
-def rerouteLowestCost(agent, currEdge, network, ph):
-  visitedEdges = agent.visitedEdges
-  destEdge = agent.destinationEdge
+""" Some old fashioned Dijkstra. Find the shortest path from @srcEdge to @destEdge on @network using @weights """
+def shortestPath(src, dest, network, weights):
+  if src == dest:
+    return [dest]
 
-  outgoing = [i.getID() for i in network.getEdge(currEdge).getOutgoing()]
-  unvisitedCandidates = [item for item in outgoing if item not in visitedEdges and unsigned(item) not in visitedEdges]
+  unvisited = {src}
+  visited = set()
 
-  validCandidates = [item for item in unvisitedCandidates if pathExists(item, destEdge, visitedEdges+[flipsign(item)], network)]
+  totalCost = {src: 0}
+  candidates = {}
 
-  # VC will be either an array containing just the unsigned destination, or the same with other elements preceeding it
-  # for now: minimize on the ph of path[0]
+  while unvisited:
+    # Pick smallest weight
+    current = min( [ (totalCost[node], node) for node in unvisited] )[1]
+    if current == dest:
+      break
+
+    unvisited.discard(current)
+    visited.add(current)
+
+    connectedNodesToEdges = {}
+    for edge in network.getNode(current).getOutgoing():
+      connectedNodesToEdges[network.getEdge(edge.getID()).getToNode().getID()] = edge.getID()
+
+    unvisitedNeighbours = set(connectedNodesToEdges.keys()).difference(visited)
+    for neighbour in unvisitedNeighbours:
+      nei_dist = totalCost[current] + weights[connectedNodesToEdges[neighbour]]
+      if nei_dist < totalCost.get(neighbour, float('inf')):
+        totalCost[neighbour] = nei_dist
+        candidates[neighbour] = current
+        unvisited.add(neighbour)
+
+  return unpackPath(candidates, dest)
+
+""" Dijkstra utility function """
+def unpackPath(candidates, dest):
+  if dest not in candidates:
+    return None
+  goal = dest
+  path = []
+  while goal:
+    path.append(goal)
+    goal = candidates.get(goal)
+  return list(reversed(path))
+
+""" Convert @junctionList to the corresponding edgeList. This function is needed because traci's reroute takes a list of edges,
+but dijkstra returns a list of vertices. """
+def edgeListConvert(vertexList, network):
+  incomingEdges = []
+  outgoingEdges = []
+  edgeList = []
+
+  i = 0
+  while i < len(vertexList)-1: # get outgoing up to last one
+    outgoingEdges.append([j.getID() for j in network.getNode(vertexList[i]).getOutgoing()])
+    i += 1
+
+  i = 1
+  while i < len(vertexList): # get incoming starting from first
+    incomingEdges.append([j.getID() for j in network.getNode(vertexList[i]).getIncoming()])
+    i += 1
+
+  assert len(incomingEdges) == len(outgoingEdges)
+  i = 0
+  while i < len(incomingEdges):
+    currIncoming = incomingEdges[i]
+    currOutgoing = outgoingEdges[i]
+    edgeList.append(str(list( set(currIncoming).intersection(currOutgoing) )[0]) )
+    i += 1
+
+  return edgeList
+
+""" Check if any edges in @edgeList exceed a threshold density """
+def congestionExcessive(edgeList, ph, network):
+  excessive = False
+  i = 0
+  while not excessive and i < len(edgeList):
+    currPh = ph[edgeList[i]]
+   # print currPh
+    if currPh > 10:
+      excessive = True
+    i += 1
+
+  return excessive
 
 """ Check if a path exists in @network between @srcEdge and @destEdge that does not include @visitedEdges """
 def pathExists(srcEdge, destEdge, visitedEdges, network):
@@ -122,7 +212,7 @@ def pathExists(srcEdge, destEdge, visitedEdges, network):
       else:
         q.append((out, path + [ unsigned(out) ]))
 
-  return None
+  return False
 
 """ Find the average moments to destination for @universalAgents and @compliantAgents """
 def averages(universalAgents, compliantAgents):
@@ -198,7 +288,7 @@ def executeSimple(compliantAgents, config, startCommand):
 
   for trip in getTrips(config.routefile):
     if trip.agent in compliantAgents:
-      compliantAgents[trip.agent].destinationEdge = unsigned(trip.dest)
+      compliantAgents[trip.agent].destination = unsigned(trip.dest)
 
   print "Launching ACO simulation..."
   for _ in xrange(int(config.endtime)):
@@ -210,7 +300,7 @@ def executeSimple(compliantAgents, config, startCommand):
       traci.vehicle.setColor(compliantV, RED)
 
       currentEdge = traci.vehicle.getRoadID(compliantV)
-      if compliantAgents[compliantV].lastEdge != currentEdge and unsigned(currentEdge) != compliantAgents[compliantV].destinationEdge:
+      if compliantAgents[compliantV].lastEdge != currentEdge and unsigned(currentEdge) != compliantAgents[compliantV].destination:
         reroute(
           compliantAgents[compliantV], 
           currentEdge, 
@@ -230,6 +320,7 @@ def executeSimple(compliantAgents, config, startCommand):
   return ACOMetrics(*averages(sumolist(config.logfile), compliantAgents))
 
 """ Launch the simulation with the following optimizations:
+ - Actually use edges and vertices instead of this weird unsigned stuff
  - Pheromone deposit and evaporation optimized
  - Reroute triggers a full reroute to destination, not a single edge
  - Reroute finds the shortest path considering a balance of distance and density
@@ -242,32 +333,32 @@ def executeOptimized(compliantAgents, config, startCommand):
 
   for trip in getTrips(config.routefile):
     if trip.agent in compliantAgents:
-      compliantAgents[trip.agent].destinationEdge = unsigned(trip.dest)
+      compliantAgents[trip.agent].source = network.getEdge(trip.src).getFromNode().getID()
+      compliantAgents[trip.agent].destination = network.getEdge(trip.dest).getToNode().getID()
 
-  print "Launching ACO simulation..."
+  print "Launching Optimized ACO simulation..."
   for _ in xrange(int(config.endtime)):
     presentAgents = traci.vehicle.getIDList()
-    
-    for e in ph:
-      ph[e] = int(traci.edge.getLastStepVehicleNumber(e)) + float(network.getEdge(e).getLength())
-      print e, ph[e]
 
-    exit(0)
+    for e in ph:
+      #ph[e] = (1 - EVAP_RATE) * (ph[e] + sum([traci.vehicle.getSpeed(v)/network.getEdge(e).getLength() for v in traci.edge.getLastStepVehicleIDs(e)]) )
+      ph[e] = len(traci.edge.getLastStepVehicleIDs(e))
+
     for compliantV in set(presentAgents).intersection(compliantAgents):
       traci.vehicle.setColor(compliantV, RED)
-
-      currentEdge = traci.vehicle.getRoadID(compliantV)
-      if compliantAgents[compliantV].lastEdge != currentEdge and unsigned(currentEdge) != compliantAgents[compliantV].destinationEdge:
-        reroute(
-          compliantAgents[compliantV], 
-          currentEdge, 
-          network, 
-          ph
-        )
-        compliantAgents[compliantV].lastEdge = currentEdge
+      if congestionExcessive(traci.vehicle.getRoute(compliantV), ph, network) and traci.vehicle.getRoadID(compliantV)[0] != ":":
+        #print compliantV, compliantAgents[compliantV].destination
+        edgeList = edgeListConvert( 
+          shortestPath(
+            network.getEdge(traci.vehicle.getRoadID(compliantV)).getToNode().getID(), 
+            compliantAgents[compliantV].destination, 
+            network, 
+            ph), 
+          network)
+        traci.vehicle.setRoute(compliantV, [traci.vehicle.getRoadID(compliantV)]+edgeList)
 
     traci.simulationStep()
-
+    
   traci.close(False)
   time.sleep(1)
   print "\nDone."
