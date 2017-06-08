@@ -76,14 +76,19 @@ def reroute(agent, currEdge, network, ph):
   outgoing = [i.getID() for i in network.getEdge(currEdge).getOutgoing()]
   unvisitedCandidates = [item for item in outgoing if item not in visitedEdges and unsigned(item) not in visitedEdges]
 
-  if unsigned(destEdge) in [ unsigned(item) for item in unvisitedCandidates]:
-    validCandidates = [ unvisitedCandidates[ [unsigned(item) for item in unvisitedCandidates ].index( unsigned(destEdge) ) ]]
-  else:
-    validCandidates = [item for item in unvisitedCandidates if pathExists(item, destEdge, visitedEdges+[flipsign(item)], network)]
+  validCandidates = []
+  i = 0
+  while destEdge not in validCandidates and unsigned(destEdge) not in validCandidates and i < len(unvisitedCandidates):
+    if pathExists(unvisitedCandidates[i], destEdge, visitedEdges+[flipsign(unvisitedCandidates[i])], network):
+      validCandidates.append(unvisitedCandidates[i])
+    i += 1
 
-  minPh = BIG_NUM
-  candidateKeypairs = {key: ph[key] for key in ph if key in validCandidates}
-  target = min(candidateKeypairs, key=candidateKeypairs.get)
+  unsignedCandidates = [unsigned(item) for item in validCandidates]
+  if unsigned(destEdge) in unsignedCandidates:
+    target = validCandidates[unsignedCandidates.index(unsigned(destEdge))]
+  else:
+    candidateKeypairs = {key: ph[key] for key in ph if key in validCandidates}
+    target = min(candidateKeypairs, key=candidateKeypairs.get)
 
   visitedEdges.append(target)
   visitedEdges.append(flipsign(target))
@@ -97,17 +102,16 @@ def rerouteLowestCost(agent, currEdge, network, ph):
   outgoing = [i.getID() for i in network.getEdge(currEdge).getOutgoing()]
   unvisitedCandidates = [item for item in outgoing if item not in visitedEdges and unsigned(item) not in visitedEdges]
 
-  if unsigned(destEdge) in [ unsigned(item) for item in unvisitedCandidates]:
-    validCandidates = [ unvisitedCandidates[ [unsigned(item) for item in unvisitedCandidates ].index( unsigned(destEdge) ) ]]
-  else: # fix to extract paths
-    validCandidates = [item for item in unvisitedCandidates if pathExists(item, destEdge, visitedEdges+[flipsign(item)], network)]
+  validCandidates = [item for item in unvisitedCandidates if pathExists(item, destEdge, visitedEdges+[flipsign(item)], network)]
 
   # VC will be either an array containing just the unsigned destination, or the same with other elements preceeding it
   # for now: minimize on the ph of path[0]
 
-
 """ Check if a path exists in @network between @srcEdge and @destEdge that does not include @visitedEdges """
 def pathExists(srcEdge, destEdge, visitedEdges, network):
+  if unsigned(srcEdge) == unsigned(destEdge):
+    return True
+
   q = [(srcEdge, [srcEdge])]
   while q:
     (curr, path) = q.pop(0)
@@ -245,8 +249,10 @@ def executeOptimized(compliantAgents, config, startCommand):
     presentAgents = traci.vehicle.getIDList()
     
     for e in ph:
-      ph[e] = int(traci.edge.getLastStepVehicleNumber(e))
+      ph[e] = int(traci.edge.getLastStepVehicleNumber(e)) + float(network.getEdge(e).getLength())
+      print e, ph[e]
 
+    exit(0)
     for compliantV in set(presentAgents).intersection(compliantAgents):
       traci.vehicle.setColor(compliantV, RED)
 
@@ -282,9 +288,9 @@ def main():
   benchmarkResults = ACOMetrics(*averages(sumolist(configPaths.logfile), compliantAgents))
   benchmarkResults.dumpMetrics()
 
-  simulationResults = executeSimple(copy.deepcopy(compliantAgents), configPaths, sumoGui if gui else sumoCmd)
-  print "Dumping metrics changes from simple ACO..."
-  simulationResults.dumpMetrics()
+  #simulationResults = executeSimple(copy.deepcopy(compliantAgents), configPaths, sumoGui if gui else sumoCmd)
+  #print "Dumping metrics changes from simple ACO..."
+  #simulationResults.dumpMetrics()
 
   simulationResults = executeOptimized(copy.deepcopy(compliantAgents), configPaths, sumoGui if gui else sumoCmd)
   print "Dumping metrics changes from optimized (ph) ACO..."
