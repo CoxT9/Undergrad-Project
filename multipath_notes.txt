@@ -1,0 +1,36 @@
+Notes on setting up a multipath system for traffic routing with ACO (And some notes on optimizing the existing single path system):
+
+HOPNET:
+Ants can be used for multiple paths. HOPNET can find >1 path from src to dest.
+In the MANET space, ACO is used for multipath systems. This encourages bandwith and robustability.
+
+The routing runs by sending multiple copies of the 'ant' down different paths (ie: to different zones). The source node asks all peripherals "please find my destination".
+-> Model for road networks: Run down all routes and see if there are duplicate-cost paths (parallelized)
+
+BFM:
+BFM finds shortest path by checking status of all edges (not a greedy selection like dijkstra). BFM starts with each node and its neighbours and eventually learns the distance of all src, dest pairs. BFM and Dijkstra can be modified to find *all* shortes paths/candidate paths. This is the 'K-shortest path problem' and can be looked at with either traversal mechanism. It seems easier to find k-shortest paths with BFM because BFM looks at all edges where Dijkstra runs from src to dest in a 'greedy' manner. Dijkstra can fail because it won't see a multi-hop, lower cost path (if the edge is negative).
+-> Look into a proactive BFM system for the traffic problem
+
+DTPOS:
+DTPOS has a clear pheromone deposit/evaporation model.
+DTPOS lays down a mathematical model for the ACO system they used.
+The path selection is done on a scoring basis (again all paths examined).
+
+The cost of a path in DTPOS is distance * traffic. 
+Again DTPOS is about modelling an entire graph, do traffic is init to 1/distance in all edges, and then adjusted by the given update formula.
+
+DTPOS uses a probability model to define the score of all paths, and attempts to minimize the "score"
+
+-> Can define edge cost as dist * traffic for existing system
+
+IACO:
+IACO is a 2-phase system. Phase 1 deposits initial PH with dijkstra, then the next phase continues to use Dijkstra but with a modified criteria.
+Big question: Why is a 2-phase approach necessary? Why not just run dijkstra with the modified criteria and the traffic criterium starts at 0?
+IACO appears to actually increase the ph deposit by a constant -> the idea is that every agent runs this algorithm (every agent increeases ph by DEP_PHER)
+-> IACO also stores the variation of the ph and allows it to be incorporated into cost analysis
+
+One concept here appears to be that the ph is updated by every agent, but the evaporation is handled by a global function.
+
+Next steps:
+Tweak existing ph model with insights from DTPOS and IACO
+Look at a multi-path BFM system and/or something that uses the DTPOS model.
