@@ -71,17 +71,20 @@ import copy
 import math
 import os
 import subprocess
-import sumolib
 import sys
 import time
-import traci
 import xml.etree.ElementTree
 
-BIG_NUM = 1000
-PH_THRESHOLD = 50
-EVAP_RATE = .08
-RED = (255, 0, 0, 0)
+sys.path.append(os.path.join(os.environ["SUMO_HOME"], "tools"))
 
+import sumolib
+import traci
+
+BIG_NUM = 1000
+PH_THRESHOLD = 100
+EVAP_RATE = .08
+DEP_RATE = 0.5
+RED = (255, 0, 0, 0)
 ##################################################################################################################################
 ####################################################### FUNCTIONS ################################################################
 ##################################################################################################################################
@@ -184,6 +187,10 @@ def edgeListConvert(vertexList, network):
 
   return edgeList
 
+""" Get all non-internal edges in the system """
+def getExplicitEdges():
+  return [ edge for edge in traci.edge.getIDList() if edge[0] != ":"]
+
 """ Check if any edges in @edgeList exceed a threshold density """
 def congestionExcessive(edgeList, ph, network):
   excessive = False
@@ -191,7 +198,7 @@ def congestionExcessive(edgeList, ph, network):
   while not excessive and i < len(edgeList):
     currPh = ph[edgeList[i]]
    # print currPh
-    if currPh > 10:
+    if currPh > PH_THRESHOLD:
       excessive = True
     i += 1
 
@@ -319,6 +326,10 @@ def executeSimple(compliantAgents, config, startCommand):
   print "\nDone."
   return ACOMetrics(*averages(sumolist(config.logfile), compliantAgents))
 
+""" impl the traffic delta formula from DTPOS """
+def trafficDelta(edge, network):
+  return sum([ traci.vehicle.getSpeed(v)/(network.getEdge(edge).getLength()/1000) for v in traci.edge.getLastStepVehicleIDs(edge)])
+
 """ Launch the simulation with the following optimizations:
  - Actually use edges and vertices instead of this weird unsigned stuff
  - Pheromone deposit and evaporation optimized
@@ -329,7 +340,8 @@ def executeSimple(compliantAgents, config, startCommand):
 def executeOptimized(compliantAgents, config, startCommand):
   network = sumolib.net.readNet(config.networkfile)
   traci.start(startCommand)
-  ph = {value:0 for value in traci.edge.getIDList()}
+  costStore = {value:0 for value in getExplicitEdges()}
+  traffic = {value:1/(network.getEdge(value).getLength()/1000) for value in getExplicitEdges()}
 
   for trip in getTrips(config.routefile):
     if trip.agent in compliantAgents:
@@ -340,20 +352,32 @@ def executeOptimized(compliantAgents, config, startCommand):
   for _ in xrange(int(config.endtime)):
     presentAgents = traci.vehicle.getIDList()
 
-    for e in ph:
-      #ph[e] = (1 - EVAP_RATE) * (ph[e] + sum([traci.vehicle.getSpeed(v)/network.getEdge(e).getLength() for v in traci.edge.getLastStepVehicleIDs(e)]) )
-      ph[e] = len(traci.edge.getLastStepVehicleIDs(e))
+    # One big goal right now is to identify the model for which the cost of edges will be defined.
+    # IACO and DTPOS have provided some insight here, they are compared to the SUMO-native shortest-time, and by simple evaluating the number of vehicles alone
+    # DTPOS appears to outperform IACO, though DTPOS is only being used here for its representation of traffic on edges.
+    # Need to find the right way to model the pseudodynamic nature of traffic networks for use in dijkstra
+    for e in [edge for edge in costStore if edge[0] != ":"]: # Skip internal edges
+      # IACO model
+      #costStore[e] = network.getEdge(e).getLength() + ( traci.edge.getLastStepVehicleNumber(e) * DEP_RATE) - ( (network.getEdge(e).getLength()/network.getEdge(e).getSpeed()) * DEP_RATE )
+      # DTPOS model
+      # the cost is distance*traffic
+      # Setup cost then update traffic for next time interval
+      # This uses the cost evaluation for edges from DTPOS, but does not use the entire model (ie: use dijkstra instead of scoring summation)
+      costStore[e] = traci.edge.getLastStepVehicleNumber(e) * (0.5 * (network.getEdge(e).getLength()/1000)) * (0.5 * traffic[e])
+      traffic[e] = ((1 - EVAP_RATE) * traffic[e]) + trafficDelta(e, network)
+      # Pure-density model
+      #costStore[e] = traci.edge.getLastStepVehicleNumber(e)
+    #print costStore["-313"]
 
     for compliantV in set(presentAgents).intersection(compliantAgents):
       traci.vehicle.setColor(compliantV, RED)
-      if congestionExcessive(traci.vehicle.getRoute(compliantV), ph, network) and traci.vehicle.getRoadID(compliantV)[0] != ":":
-        #print compliantV, compliantAgents[compliantV].destination
+      if congestionExcessive(traci.vehicle.getRoute(compliantV), costStore, network) and traci.vehicle.getRoadID(compliantV)[0] != ":":
         edgeList = edgeListConvert( 
           shortestPath(
             network.getEdge(traci.vehicle.getRoadID(compliantV)).getToNode().getID(), 
             compliantAgents[compliantV].destination, 
             network, 
-            ph), 
+            costStore), 
           network)
         traci.vehicle.setRoute(compliantV, [traci.vehicle.getRoadID(compliantV)]+edgeList)
 
