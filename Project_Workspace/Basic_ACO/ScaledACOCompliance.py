@@ -1,5 +1,5 @@
 """
-A WIP script to demo the performance of a very basic repellent-ACO system scaled to multiple vehicles.
+A WIP script to demo the performance of a repellent-ACO system scaled to multiple vehicles.
 The script tracks the following metrics, doing so with and without ACO in effect:
 - Moments to destination for all vehicles
 - Moments to destination for compliant vehicles
@@ -115,8 +115,15 @@ def reroute(agent, currEdge, network, ph):
   visitedEdges.append(flipsign(target))
   traci.vehicle.setRoute(agent.agentid, [currEdge, target])
 
-""" Some old fashioned Dijkstra. Find the shortest path from @srcEdge to @destEdge on @network using @weights """
 def shortestPath(src, dest, network, weights):
+  dijkstra(src, dest, network, weights)
+
+""" BFM implementation """
+def bfm(src, dest, network, weights):
+  pass
+  
+""" Some old fashioned Dijkstra. Find the shortest path from @srcEdge to @destEdge on @network using @weights """
+def dijkstra(src, dest, network, weights):
   if src == dest:
     return [dest]
 
@@ -330,6 +337,13 @@ def executeSimple(compliantAgents, config, startCommand):
 def trafficDelta(edge, network):
   return sum([ traci.vehicle.getSpeed(v)/(network.getEdge(edge).getLength()/1000) for v in traci.edge.getLastStepVehicleIDs(edge)])
 
+""" geyt @edge average speed """
+def getAverageSpeed(edge):
+  currAgents = traci.edge.getLastStepVehicleIDs(edge)
+  total = len(currAgents)
+  sumSpeed = sum(traci.vehicle.getSpeed(v) for v in currAgents)
+  return sumSpeed / total
+
 """ Launch the simulation with the following optimizations:
  - Actually use edges and vertices instead of this weird unsigned stuff
  - Pheromone deposit and evaporation optimized
@@ -356,7 +370,7 @@ def executeOptimized(compliantAgents, config, startCommand):
     # IACO and DTPOS have provided some insight here, they are compared to the SUMO-native shortest-time, and by simple evaluating the number of vehicles alone
     # DTPOS appears to outperform IACO, though DTPOS is only being used here for its representation of traffic on edges.
     # Need to find the right way to model the pseudodynamic nature of traffic networks for use in dijkstra
-    for e in [edge for edge in costStore if edge[0] != ":"]: # Skip internal edges
+    for e in getExplicitEdges(): # Skip internal edges
       # IACO model
       #costStore[e] = network.getEdge(e).getLength() + ( traci.edge.getLastStepVehicleNumber(e) * DEP_RATE) - ( (network.getEdge(e).getLength()/network.getEdge(e).getSpeed()) * DEP_RATE )
       # DTPOS model
@@ -365,13 +379,14 @@ def executeOptimized(compliantAgents, config, startCommand):
       # This uses the cost evaluation for edges from DTPOS, but does not use the entire model (ie: use dijkstra instead of scoring summation)
       costStore[e] = traci.edge.getLastStepVehicleNumber(e) * (0.5 * (network.getEdge(e).getLength()/1000)) * (0.5 * traffic[e])
       traffic[e] = ((1 - EVAP_RATE) * traffic[e]) + trafficDelta(e, network)
+      #costStore[e] = network.getEdge(e).getLength()/1000 + traffic[e]
       # Pure-density model
       #costStore[e] = traci.edge.getLastStepVehicleNumber(e)
     #print costStore["-313"]
 
     for compliantV in set(presentAgents).intersection(compliantAgents):
       traci.vehicle.setColor(compliantV, RED)
-      if congestionExcessive(traci.vehicle.getRoute(compliantV), costStore, network) and traci.vehicle.getRoadID(compliantV)[0] != ":":
+      if congestionExcessive(traci.vehicle.getRoute(compliantV), costStore, network) and traci.vehicle.getRoadID(compliantV) in getExplicitEdges():
         edgeList = edgeListConvert( 
           shortestPath(
             network.getEdge(traci.vehicle.getRoadID(compliantV)).getToNode().getID(), 
@@ -380,6 +395,7 @@ def executeOptimized(compliantAgents, config, startCommand):
             costStore), 
           network)
         traci.vehicle.setRoute(compliantV, [traci.vehicle.getRoadID(compliantV)]+edgeList)
+
 
     traci.simulationStep()
     
