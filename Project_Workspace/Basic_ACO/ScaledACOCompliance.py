@@ -40,7 +40,6 @@ class Agent(object):
     self.destination = destination if destination else ""
     self.source = source if source else ""
 
-
 class ACOMetrics(object):
   def __init__(self, averageCompliantAgentTime, overallAverageTime):
     self.averageCompliantAgentTime = averageCompliantAgentTime
@@ -116,12 +115,9 @@ def reroute(agent, currEdge, network, ph):
   traci.vehicle.setRoute(agent.agentid, [currEdge, target])
 
 def shortestPath(src, dest, network, weights):
-  dijkstra(src, dest, network, weights)
+  return dijkstra(src, dest, network, weights)
+  #return bfm(src, dest, network, weights)
 
-""" BFM implementation """
-def bfm(src, dest, network, weights):
-  pass
-  
 """ Some old fashioned Dijkstra. Find the shortest path from @srcEdge to @destEdge on @network using @weights """
 def dijkstra(src, dest, network, weights):
   if src == dest:
@@ -156,6 +152,60 @@ def dijkstra(src, dest, network, weights):
 
   return unpackPath(candidates, dest)
 
+""" get a sumo specific edge """
+def getEdge(network, node, neighbour):
+  outgoingEdges = [out.getID() for out in network.getNode(node).getOutgoing()]
+  incomingEdges = [_in.getID() for _in in network.getNode(neighbour).getIncoming()]
+  link = list(set(outgoingEdges).intersection(set(incomingEdges)))
+  assert len(link) > 0
+  return link[0]
+
+""" get a sumo network node neighbours """
+def getNeighbors(network, node):
+  return [ network.getEdge(e.getID()).getToNode().getID() for e in network.getNode(node).getOutgoing() ]
+
+""" Setup BFM params """
+def initBfm(src, network):
+  dests = {}
+  prevs = {}
+
+  for node in network.getNodes():
+    dests[node.getID()] = float('Inf')
+    prevs[node.getID()] = None
+  dests[src] = 0
+  return dests, prevs
+
+""" Relax utility method for bfm """
+def relax(node, neighbour, network, dests, prevs, weights):
+  # Find better path between node and neighbour
+  edge = getEdge(network, node, neighbour)
+  if dests[neighbour] > dests[node] + weights[edge]:
+    dests[neighbour] = dests[node] + weights[edge]
+    prevs[neighbour] = node
+
+""" A different pathing approach: Bellman-Ford-Moore. Same params as Dijkstra but different algorithm """
+def bfm(src, dest, network, weights):
+  dests, prevs = initBfm(src, network)
+  nodes = network.getNodes()
+  for i in range(len(nodes)-1):
+    for node in nodes:
+      for neighbour in getNeighbors(network, node.getID()):
+        relax(node.getID(), neighbour, network, dests, prevs, weights)
+
+  for node in network.getNodes():
+    for neighbour in getNeighbors(network, node.getID()):
+      edge = getEdge(network, node.getID(), neighbour)
+      assert dests[neighbour] <= dests[node.getID()] + weights[edge]
+
+  # return actual route (1-Shortest-Path for now)
+  currNode = dest
+  path = []
+  while currNode != None:
+    path.insert(0, currNode)
+    currNode = prevs[currNode]
+
+  return path
+
 """ Dijkstra utility function """
 def unpackPath(candidates, dest):
   if dest not in candidates:
@@ -167,7 +217,7 @@ def unpackPath(candidates, dest):
     goal = candidates.get(goal)
   return list(reversed(path))
 
-""" Convert @junctionList to the corresponding edgeList. This function is needed because traci's reroute takes a list of edges,
+""" Convert @vertexList to the corresponding edgeList. This function is needed because traci's reroute takes a list of edges,
 but dijkstra returns a list of vertices. """
 def edgeListConvert(vertexList, network):
   incomingEdges = []
@@ -334,8 +384,8 @@ def executeSimple(compliantAgents, config, startCommand):
   return ACOMetrics(*averages(sumolist(config.logfile), compliantAgents))
 
 """ impl the traffic delta formula from DTPOS """
-def trafficDelta(edge, network):
-  return sum([ traci.vehicle.getSpeed(v)/(network.getEdge(edge).getLength()/1000) for v in traci.edge.getLastStepVehicleIDs(edge)])
+def trafficDelta(edge, network, agents, edgelen):
+  return sum([ traci.vehicle.getSpeed(v)/(edgelen) for v in agents])
 
 """ geyt @edge average speed """
 def getAverageSpeed(edge):
@@ -366,23 +416,16 @@ def executeOptimized(compliantAgents, config, startCommand):
   for _ in xrange(int(config.endtime)):
     presentAgents = traci.vehicle.getIDList()
 
-    # One big goal right now is to identify the model for which the cost of edges will be defined.
-    # IACO and DTPOS have provided some insight here, they are compared to the SUMO-native shortest-time, and by simple evaluating the number of vehicles alone
-    # DTPOS appears to outperform IACO, though DTPOS is only being used here for its representation of traffic on edges.
-    # Need to find the right way to model the pseudodynamic nature of traffic networks for use in dijkstra
+    # Traffic density model
     for e in getExplicitEdges(): # Skip internal edges
       # IACO model
       #costStore[e] = network.getEdge(e).getLength() + ( traci.edge.getLastStepVehicleNumber(e) * DEP_RATE) - ( (network.getEdge(e).getLength()/network.getEdge(e).getSpeed()) * DEP_RATE )
       # DTPOS model
-      # the cost is distance*traffic
-      # Setup cost then update traffic for next time interval
-      # This uses the cost evaluation for edges from DTPOS, but does not use the entire model (ie: use dijkstra instead of scoring summation)
-      costStore[e] = traci.edge.getLastStepVehicleNumber(e) * (0.5 * (network.getEdge(e).getLength()/1000)) * (0.5 * traffic[e])
-      traffic[e] = ((1 - EVAP_RATE) * traffic[e]) + trafficDelta(e, network)
-      #costStore[e] = network.getEdge(e).getLength()/1000 + traffic[e]
-      # Pure-density model
-      #costStore[e] = traci.edge.getLastStepVehicleNumber(e)
-    #print costStore["-313"]
+      agents = traci.edge.getLastStepVehicleIDs(e)
+      edgelen = network.getEdge(e).getLength()/1000
+
+      costStore[e] = len(agents) * (0.5 * (edgelen)) * (0.5 * traffic[e])
+      traffic[e] = ((1 - EVAP_RATE) * traffic[e]) + trafficDelta(e, network, agents, edgelen)
 
     for compliantV in set(presentAgents).intersection(compliantAgents):
       traci.vehicle.setColor(compliantV, RED)
@@ -395,7 +438,6 @@ def executeOptimized(compliantAgents, config, startCommand):
             costStore), 
           network)
         traci.vehicle.setRoute(compliantV, [traci.vehicle.getRoadID(compliantV)]+edgeList)
-
 
     traci.simulationStep()
     

@@ -33,4 +33,4 @@ One concept here appears to be that the ph is updated by every agent, but the ev
 
 Next steps:
 Tweak existing ph model with insights from DTPOS and IACO
-Look at a multi-path BFM system and/or something that uses the DTPOS model.
+Look at a multi-path BFM system and/or something that uses the DTPOS model.	

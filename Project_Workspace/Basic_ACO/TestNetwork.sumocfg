@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://sumo.sf.net/xsd/sumoConfiguration.xsd">
+
+    <input>
+        <net-file value="thirdnetwork.net.xml"/>
+        <route-files value="SmallerRoutes.rou.xml"/>
+    </input>
+
+    <output>
+        <vehroute-output.exit-times value="1"/>
+        <vehroute-output value="TestLogs.out.xml"/>
+    </output>
+
+    <time>
+        <begin value="0"/>
+        <end value="1200"/>
+    </time>
+
+</configuration>
