@@ -65,7 +65,9 @@ class SumoConfigWrapper(object):
 ###################################################### SETUP #####################################################################
 ##################################################################################################################################
 from fractions import Fraction
+from multiprocessing import Process
 from random import randint
+from threading import Thread
 import copy
 import math
 import os
@@ -80,7 +82,7 @@ import sumolib
 import traci
 
 BIG_NUM = 1000
-PH_THRESHOLD = 100
+PH_THRESHOLD = 150
 EVAP_RATE = .08
 DEP_RATE = 0.5
 RED = (255, 0, 0, 0)
@@ -115,8 +117,8 @@ def reroute(agent, currEdge, network, ph):
   traci.vehicle.setRoute(agent.agentid, [currEdge, target])
 
 def shortestPath(src, dest, network, weights):
-  return dijkstra(src, dest, network, weights)
-  #return bfm(src, dest, network, weights)
+  #return dijkstra(src, dest, network, weights)
+  return bfm(src, dest, network, weights)
 
 """ Some old fashioned Dijkstra. Find the shortest path from @srcEdge to @destEdge on @network using @weights """
 def dijkstra(src, dest, network, weights):
@@ -150,15 +152,8 @@ def dijkstra(src, dest, network, weights):
         candidates[neighbour] = current
         unvisited.add(neighbour)
 
-  return unpackPath(candidates, dest)
-
-""" get a sumo specific edge """
-def getEdge(network, node, neighbour):
-  outgoingEdges = [out.getID() for out in network.getNode(node).getOutgoing()]
-  incomingEdges = [_in.getID() for _in in network.getNode(neighbour).getIncoming()]
-  link = list(set(outgoingEdges).intersection(set(incomingEdges)))
-  assert len(link) > 0
-  return link[0]
+  result = unpackPath(candidates, dest)
+  return result
 
 """ get a sumo network node neighbours """
 def getNeighbors(network, node):
@@ -176,26 +171,22 @@ def initBfm(src, network):
   return dests, prevs
 
 """ Relax utility method for bfm """
-def relax(node, neighbour, network, dests, prevs, weights):
+def relax(node, neighbour, network, dests, prevs, weights, edgesStore):
   # Find better path between node and neighbour
-  edge = getEdge(network, node, neighbour)
+  edge = edgesStore[(node, neighbour)]
   if dests[neighbour] > dests[node] + weights[edge]:
     dests[neighbour] = dests[node] + weights[edge]
     prevs[neighbour] = node
 
 """ A different pathing approach: Bellman-Ford-Moore. Same params as Dijkstra but different algorithm """
 def bfm(src, dest, network, weights):
+  edgesStore = buildEdgesStore(network, weights.keys())
   dests, prevs = initBfm(src, network)
   nodes = network.getNodes()
   for i in range(len(nodes)-1):
     for node in nodes:
       for neighbour in getNeighbors(network, node.getID()):
-        relax(node.getID(), neighbour, network, dests, prevs, weights)
-
-  for node in network.getNodes():
-    for neighbour in getNeighbors(network, node.getID()):
-      edge = getEdge(network, node.getID(), neighbour)
-      assert dests[neighbour] <= dests[node.getID()] + weights[edge]
+        relax(node.getID(), neighbour, network, dests, prevs, weights, edgesStore)
 
   # return actual route (1-Shortest-Path for now)
   currNode = dest
@@ -394,6 +385,29 @@ def getAverageSpeed(edge):
   sumSpeed = sum(traci.vehicle.getSpeed(v) for v in currAgents)
   return sumSpeed / total
 
+""" build a table of (node, node) => edge """
+def buildEdgesStore(network, edges):
+  store = {}
+  for e in edges:
+    edge = network.getEdge(e)
+    toNode = edge.getToNode().getID()
+    fromNode = edge.getFromNode().getID()
+    store[(toNode, fromNode)] = e
+
+  return store
+
+""" Function for shortest path reroute """
+def routeVehicle(vehicleId, costStore, network, edges, compliantAgents, currentRoad, currentRoute, newRoutes):
+  if congestionExcessive(currentRoute, costStore, network) and currentRoad in edges:
+    edgeList = edgeListConvert(
+      shortestPath(
+        network.getEdge(currentRoad).getToNode().getID(),
+        compliantAgents[vehicleId].destination,
+        network,
+        costStore),
+      network)
+    newRoutes[vehicleId] = [currentRoad]+edgeList
+
 """ Launch the simulation with the following optimizations:
  - Actually use edges and vertices instead of this weird unsigned stuff
  - Pheromone deposit and evaporation optimized
@@ -404,8 +418,9 @@ def getAverageSpeed(edge):
 def executeOptimized(compliantAgents, config, startCommand):
   network = sumolib.net.readNet(config.networkfile)
   traci.start(startCommand)
-  costStore = {value:0 for value in getExplicitEdges()}
-  traffic = {value:1/(network.getEdge(value).getLength()/1000) for value in getExplicitEdges()}
+  edges = getExplicitEdges()
+  costStore = {value:0 for value in edges}
+  traffic = {value:1/(network.getEdge(value).getLength()/1000) for value in edges}
 
   for trip in getTrips(config.routefile):
     if trip.agent in compliantAgents:
@@ -417,9 +432,9 @@ def executeOptimized(compliantAgents, config, startCommand):
     presentAgents = traci.vehicle.getIDList()
 
     # Traffic density model
-    for e in getExplicitEdges(): # Skip internal edges
+    for e in edges:
       # IACO model
-      #costStore[e] = network.getEdge(e).getLength() + ( traci.edge.getLastStepVehicleNumber(e) * DEP_RATE) - ( (network.getEdge(e).getLength()/network.getEdge(e).getSpeed()) * DEP_RATE )
+      # costStore[e] = network.getEdge(e).getLength() + ( traci.edge.getLastStepVehicleNumber(e) * DEP_RATE) - ( (network.getEdge(e).getLength()/network.getEdge(e).getSpeed()) * DEP_RATE )
       # DTPOS model
       agents = traci.edge.getLastStepVehicleIDs(e)
       edgelen = network.getEdge(e).getLength()/1000
@@ -427,17 +442,36 @@ def executeOptimized(compliantAgents, config, startCommand):
       costStore[e] = len(agents) * (0.5 * (edgelen)) * (0.5 * traffic[e])
       traffic[e] = ((1 - EVAP_RATE) * traffic[e]) + trafficDelta(e, network, agents, edgelen)
 
+    # Parallelize
+    threads = []
+    newRoutes = {}
     for compliantV in set(presentAgents).intersection(compliantAgents):
       traci.vehicle.setColor(compliantV, RED)
-      if congestionExcessive(traci.vehicle.getRoute(compliantV), costStore, network) and traci.vehicle.getRoadID(compliantV) in getExplicitEdges():
-        edgeList = edgeListConvert( 
-          shortestPath(
-            network.getEdge(traci.vehicle.getRoadID(compliantV)).getToNode().getID(), 
-            compliantAgents[compliantV].destination, 
-            network, 
-            costStore), 
-          network)
-        traci.vehicle.setRoute(compliantV, [traci.vehicle.getRoadID(compliantV)]+edgeList)
+      currentRoad = traci.vehicle.getRoadID(compliantV)
+      currentRoute = traci.vehicle.getRoute(compliantV)
+      threads.append(Process( # Can interchange between thread or process
+        target=routeVehicle, 
+        args=(
+          compliantV, 
+          costStore, 
+          network, 
+          edges, 
+          compliantAgents, 
+          currentRoad, 
+          currentRoute, 
+          newRoutes, 
+          )
+        )
+      )
+    
+    for t in threads:
+      t.start()
+
+    for t in threads:
+      t.join()
+
+    for key in newRoutes:
+      traci.vehicle.setRoute(key, newRoutes[key])
 
     traci.simulationStep()
     
