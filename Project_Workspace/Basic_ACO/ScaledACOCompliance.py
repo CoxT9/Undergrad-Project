@@ -82,7 +82,7 @@ import sumolib
 import traci
 
 BIG_NUM = 1000
-PH_THRESHOLD = 150
+PH_THRESHOLD = 250
 EVAP_RATE = .08
 DEP_RATE = 0.5
 RED = (255, 0, 0, 0)
@@ -188,7 +188,12 @@ def bfm(src, dest, network, weights):
       for neighbour in getNeighbors(network, node.getID()):
         relax(node.getID(), neighbour, network, dests, prevs, weights, edgesStore)
 
-  # return actual route (1-Shortest-Path for now)
+  for node in network.getNodes():
+    for neighbour in getNeighbors(network, node.getID()):
+      edge = edgesStore[(node.getID(), neighbour)]
+      assert dests[neighbour] <= dests[node.getID()] + weights[edge]
+
+  # return actual route
   currNode = dest
   path = []
   while currNode != None:
@@ -449,7 +454,7 @@ def executeOptimized(compliantAgents, config, startCommand):
       traci.vehicle.setColor(compliantV, RED)
       currentRoad = traci.vehicle.getRoadID(compliantV)
       currentRoute = traci.vehicle.getRoute(compliantV)
-      threads.append(Process( # Can interchange between thread or process
+      threads.append(Thread( # Can interchange between thread or process
         target=routeVehicle, 
         args=(
           compliantV, 
@@ -486,7 +491,6 @@ def main():
 
   configPaths = SumoConfigWrapper(config)
   compliantAgents = getParticipatingAgents(complianceFactor, configPaths.routefile)
-
   sumoGui = ["/usr/bin/sumo-gui", "-c", config]
   sumoCmd = ["/usr/bin/sumo", "-c", config]
 

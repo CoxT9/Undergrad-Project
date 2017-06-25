@@ -1,0 +1,35 @@
+Notes on zones, clustering and graph partitioning:
+
+ZRP is a hybrid protocol used for wirless networks (which are dynamic networks), but can possibly be adapted to traffic congestion networks (which are pseudo-static graphs).
+
+ZRP traditionally works as follows:
+
+Network is organized into zones. Agents inside a zone are aware of routes to all other agents (proactive). Inter-zone routing is reactive (ie: edge to edge is reactive). Edge agents are responsible for evaluating a route to get to the next zone. The edge-agents of that zone are then aware of all intra-zone travel.
+
+Traffic-sensitive routing in the literature works as follows:
+
+Both IACO and DTPOS have agents evaluate their routes as they move. At each intersection, a choice is made regarding the next edge to traverse. The edge of minimum congestion (ie: f(distance, density)) is selected. 
+
+Traffic-sensitive routing as implmented in this project works as follows:
+
+Currently, agents start with a simple dijkstra path-selection. If an edge on this path exceeds a certain level of congestion, the entire route is re-evaluated. This is also done proactively - the agent does not wait until reaching the next intersection to evaluate its route. Therefore, the entire route is evaluated at each instant (subject to change).
+
+Traffic-sensitive routing which uses zones will work as follows:
+
+- Vehicles start with a simple dijkstra path-selection.
+- Each agent is always within one zone or another (sometimes multiple zones given overlap). 
+- At any moment, the agent knows the best path to each vertex in the zone
+
+- Within each zone, the path between every vertex pair is known and updated constantly
+- When agents analyze their (candidate) path, they need to look at the path in terms of zones.
+- The agent only needs to determine how to travel between each *zone*, as opposed to each edge.
+
+- The zones should be static parameters of the graph (ie: graph partitions), and therefore are known by the agent.
+
+- The mechanism for tracking intra-zone routes can be hierarchical (gps) or distributed (v2v)
+
+Suppose an agent needs to get from src to dest, src is in Z1 and dest is in Z4,
+Z1 -> Z2 -> Z3 -> Z4.
+
+Now the agent only needs to determine the best route between zones (instead of all edges).
+If there are multiple inter-zone paths for a destination, they can be examined too (this is just a higher-level shortest path problem).
