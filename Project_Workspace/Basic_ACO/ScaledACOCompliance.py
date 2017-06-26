@@ -41,7 +41,7 @@ class Agent(object):
     self.source = source if source else ""
 
 class ACOMetrics(object):
-  def __init__(self, averageCompliantAgentTime, overallAverageTime):
+  def __init__(self, overallAverageTime, averageCompliantAgentTime):
     self.averageCompliantAgentTime = averageCompliantAgentTime
     self.overallAverageTime = overallAverageTime
 
@@ -116,9 +116,9 @@ def reroute(agent, currEdge, network, ph):
   visitedEdges.append(flipsign(target))
   traci.vehicle.setRoute(agent.agentid, [currEdge, target])
 
-def shortestPath(src, dest, network, weights):
-  #return dijkstra(src, dest, network, weights)
-  return bfm(src, dest, network, weights)
+def shortestPath(src, dest, edgesStore, network, weights):
+  return dijkstra(src, dest, network, weights)
+  #return bfm(src, dest, edgesStore, network, weights)
 
 """ Some old fashioned Dijkstra. Find the shortest path from @srcEdge to @destEdge on @network using @weights """
 def dijkstra(src, dest, network, weights):
@@ -179,8 +179,7 @@ def relax(node, neighbour, network, dests, prevs, weights, edgesStore):
     prevs[neighbour] = node
 
 """ A different pathing approach: Bellman-Ford-Moore. Same params as Dijkstra but different algorithm """
-def bfm(src, dest, network, weights):
-  edgesStore = buildEdgesStore(network, weights.keys())
+def bfm(src, dest, edgesStore, network, weights):
   dests, prevs = initBfm(src, network)
   nodes = network.getNodes()
   for i in range(len(nodes)-1):
@@ -215,27 +214,11 @@ def unpackPath(candidates, dest):
 
 """ Convert @vertexList to the corresponding edgeList. This function is needed because traci's reroute takes a list of edges,
 but dijkstra returns a list of vertices. """
-def edgeListConvert(vertexList, network):
-  incomingEdges = []
-  outgoingEdges = []
+def edgeListConvert(vertexList, edgesStore):
   edgeList = []
-
   i = 0
-  while i < len(vertexList)-1: # get outgoing up to last one
-    outgoingEdges.append([j.getID() for j in network.getNode(vertexList[i]).getOutgoing()])
-    i += 1
-
-  i = 1
-  while i < len(vertexList): # get incoming starting from first
-    incomingEdges.append([j.getID() for j in network.getNode(vertexList[i]).getIncoming()])
-    i += 1
-
-  assert len(incomingEdges) == len(outgoingEdges)
-  i = 0
-  while i < len(incomingEdges):
-    currIncoming = incomingEdges[i]
-    currOutgoing = outgoingEdges[i]
-    edgeList.append(str(list( set(currIncoming).intersection(currOutgoing) )[0]) )
+  while i < len(vertexList)-1:
+    edgeList.append( edgesStore[ (vertexList[i], vertexList[i+1]) ] )
     i += 1
 
   return edgeList
@@ -245,7 +228,7 @@ def getExplicitEdges():
   return [ edge for edge in traci.edge.getIDList() if edge[0] != ":"]
 
 """ Check if any edges in @edgeList exceed a threshold density """
-def congestionExcessive(edgeList, ph, network):
+def congestionExcessive(edgeList, ph):
   excessive = False
   i = 0
   while not excessive and i < len(edgeList):
@@ -397,20 +380,21 @@ def buildEdgesStore(network, edges):
     edge = network.getEdge(e)
     toNode = edge.getToNode().getID()
     fromNode = edge.getFromNode().getID()
-    store[(toNode, fromNode)] = e
+    store[(fromNode, toNode)] = e
 
   return store
 
 """ Function for shortest path reroute """
-def routeVehicle(vehicleId, costStore, network, edges, compliantAgents, currentRoad, currentRoute, newRoutes):
-  if congestionExcessive(currentRoute, costStore, network) and currentRoad in edges:
+def routeVehicle(vehicleId, costStore, network, edges, edgesStore, compliantAgents, currentRoad, currentRoute, newRoutes):
+  if congestionExcessive(currentRoute, costStore) and currentRoad in edges:
     edgeList = edgeListConvert(
       shortestPath(
         network.getEdge(currentRoad).getToNode().getID(),
         compliantAgents[vehicleId].destination,
+        edgesStore,
         network,
         costStore),
-      network)
+      edgesStore)
     newRoutes[vehicleId] = [currentRoad]+edgeList
 
 """ Launch the simulation with the following optimizations:
@@ -426,7 +410,7 @@ def executeOptimized(compliantAgents, config, startCommand):
   edges = getExplicitEdges()
   costStore = {value:0 for value in edges}
   traffic = {value:1/(network.getEdge(value).getLength()/1000) for value in edges}
-
+  edgesStore = buildEdgesStore(network, edges)
   for trip in getTrips(config.routefile):
     if trip.agent in compliantAgents:
       compliantAgents[trip.agent].source = network.getEdge(trip.src).getFromNode().getID()
@@ -460,7 +444,8 @@ def executeOptimized(compliantAgents, config, startCommand):
           compliantV, 
           costStore, 
           network, 
-          edges, 
+          edges,
+          edgesStore, 
           compliantAgents, 
           currentRoad, 
           currentRoute, 
