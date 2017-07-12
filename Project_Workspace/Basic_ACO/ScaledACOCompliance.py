@@ -41,13 +41,18 @@ class Agent(object):
     self.source = source if source else ""
 
 class ACOMetrics(object):
-  def __init__(self, overallAverageTime, averageCompliantAgentTime):
-    self.averageCompliantAgentTime = averageCompliantAgentTime
-    self.overallAverageTime = overallAverageTime
+  def __init__(self, overallAverageTravelTime, compliantAverageTravelTime, overallAverageWaitTime, compliantAverageWaitTime):
+    self.compliantAverageTravelTime = compliantAverageTravelTime
+    self.overallAverageTravelTime = overallAverageTravelTime
+    self.overallAverageWaitTime = overallAverageWaitTime
+    self.compliantAverageWaitTime = compliantAverageWaitTime
 
   def dumpMetrics(self):
-    print "Overall average time: ", self.overallAverageTime
-    print "Average time of compliant agents: ", self.averageCompliantAgentTime
+    print "Overall average travel time: ", self.overallAverageTravelTime
+    print "Average travel time of compliant agents: ", self.compliantAverageTravelTime
+    print "Overall average wait time: ", self.overallAverageWaitTime
+    print "Average wait time of compliant agents: ", self.compliantAverageWaitTime
+    print "\n\n"
 
 class SumoConfigWrapper(object):
   def __init__(self, configfile):
@@ -69,6 +74,7 @@ from multiprocessing import Process
 from random import randint
 from threading import Thread
 import copy
+import datetime
 import math
 import os
 import subprocess
@@ -82,7 +88,7 @@ import sumolib
 import traci
 
 BIG_NUM = 1000
-PH_THRESHOLD = 250
+PH_THRESHOLD = 150
 EVAP_RATE = .08
 DEP_RATE = 0.5
 RED = (255, 0, 0, 0)
@@ -228,13 +234,12 @@ def getExplicitEdges():
   return [ edge for edge in traci.edge.getIDList() if edge[0] != ":"]
 
 """ Check if any edges in @edgeList exceed a threshold density """
-def congestionExcessive(edgeList, ph):
+def congestionExcessive(network, edgeList, ph):
   excessive = False
   i = 0
   while not excessive and i < len(edgeList):
     currPh = ph[edgeList[i]]
-   # print currPh
-    if currPh > PH_THRESHOLD:
+    if currPh - network.getEdge(edgeList[i]).getLength() > PH_THRESHOLD:
       excessive = True
     i += 1
 
@@ -258,25 +263,32 @@ def pathExists(srcEdge, destEdge, visitedEdges, network):
   return False
 
 """ Find the average moments to destination for @universalAgents and @compliantAgents """
-def averages(universalAgents, compliantAgents):
+def averages(universalAgents, compliantAgents, waitTimesDict):
   totalAgents = len(universalAgents)
   totalCompl = len(compliantAgents)
-  overallAverageTime = 0
-  averageCompliantAgentTime = 0
+
+  overallAverageTravelTime = 0
+  compliantAverageTravelTime = 0
+  overallAverageWaitTime = 0
+  compliantAverageWaitTime = 0
 
   for vehicle in universalAgents:
-    arrival = float(BIG_NUM)
-    if vehicle.arrival is None:
-      print vehicle.id, "Failed to reach destination"
-    else:
-      arrival = float(vehicle.arrival)
-    travelTime = arrival - float(vehicle.depart)
+    travelTime = float(vehicle.arrival) - float(vehicle.depart)
+    waitTime = waitTimesDict[vehicle.id]
+
     if vehicle.id in compliantAgents:
-      averageCompliantAgentTime += travelTime
+      compliantAverageTravelTime += travelTime
+      compliantAverageWaitTime += waitTime
 
-    overallAverageTime += travelTime
+    overallAverageTravelTime += travelTime
+    overallAverageWaitTime += waitTime
 
-  return overallAverageTime/totalAgents, averageCompliantAgentTime/totalCompl
+  return ACOMetrics(
+    overallAverageTravelTime/totalAgents, 
+    -1 if totalCompl == 0 else compliantAverageTravelTime/totalCompl,
+    overallAverageWaitTime/totalAgents,
+    -1 if totalCompl == 0 else compliantAverageWaitTime/totalCompl
+  )
 
 def unsigned(identifier):
   return str(abs(int(identifier)))
@@ -299,17 +311,21 @@ def getTrips(routes):
   return trips
 
 def parseArgs():
-  if len(sys.argv) != 4:
-    print "Usage: %s <ComplianceFactor> <ConfigFile> <0/1> " % sys.argv[0]
+  if len(sys.argv) != 5:
+    print "Usage: %s <ComplianceFactor> <ConfigFile> <0/1> <CsvFile>" % sys.argv[0]
     exit(0)
 
   complianceFactor = float(sys.argv[1])
   config = sys.argv[2]
   gui = bool(int(sys.argv[3]))
-  return complianceFactor, config, gui
+  csvFile = sys.argv[4]
+  return complianceFactor, config, gui, csvFile
 
 """ Return a subset of all agents for an ACO sample population """
 def getParticipatingAgents(complianceFactor, routefile):
+  if complianceFactor == 0:
+    return {}
+
   agents = sumolist(routefile)
   complianceTotal = int(len(agents) * (complianceFactor / 100) )
   print "Total number of compliant agents:", complianceTotal
@@ -320,7 +336,6 @@ def getParticipatingAgents(complianceFactor, routefile):
     index = randint(0, len(agents)-1)
     compliantAgents[agents[index].id] = Agent(agents[index].id)
 
-  print "IDs of participating agents:", compliantAgents.keys()
   return compliantAgents
 
 """ Launch the simulation in the simplest way as a proof-of-concept """
@@ -385,8 +400,9 @@ def buildEdgesStore(network, edges):
   return store
 
 """ Function for shortest path reroute """
-def routeVehicle(vehicleId, costStore, network, edges, edgesStore, compliantAgents, currentRoad, currentRoute, newRoutes):
-  if congestionExcessive(currentRoute, costStore) and currentRoad in edges:
+def routeVehicle(vehicleId, costStore, network, edges, edgesStore, compliantAgents, currentRoad, currentRoute, newRoutes, routingTimeCost, routingCount):
+  if congestionExcessive(network, currentRoute, costStore) and currentRoad in edges:
+    currTime = time.time()
     edgeList = edgeListConvert(
       shortestPath(
         network.getEdge(currentRoad).getToNode().getID(),
@@ -395,6 +411,8 @@ def routeVehicle(vehicleId, costStore, network, edges, edgesStore, compliantAgen
         network,
         costStore),
       edgesStore)
+    routingTimeCost[vehicleId] += (time.time() - currTime)
+    routingCount[vehicleId] += 1
     newRoutes[vehicleId] = [currentRoad]+edgeList
 
 """ Launch the simulation with the following optimizations:
@@ -411,31 +429,48 @@ def executeOptimized(compliantAgents, config, startCommand):
   costStore = {value:0 for value in edges}
   traffic = {value:1/(network.getEdge(value).getLength()/1000) for value in edges}
   edgesStore = buildEdgesStore(network, edges)
+  waitTimes = {}
   for trip in getTrips(config.routefile):
+    waitTimes[trip.agent] = 0
     if trip.agent in compliantAgents:
       compliantAgents[trip.agent].source = network.getEdge(trip.src).getFromNode().getID()
       compliantAgents[trip.agent].destination = network.getEdge(trip.dest).getToNode().getID()
 
-  print "Launching Optimized ACO simulation..."
+  routingTimeCost = {value:0 for value in compliantAgents}
+  routingCount = {value:0 for value in compliantAgents}
+  print "Launching ACO simulation..."
+  traffic = {value:0 for value in edges}
   for _ in xrange(int(config.endtime)):
     presentAgents = traci.vehicle.getIDList()
 
+    for agent in presentAgents:
+      if traci.vehicle.getSpeed(agent) <= 0.1:
+        waitTimes[agent] += 1
+
     # Traffic density model
     for e in edges:
-      # IACO model
-      # costStore[e] = network.getEdge(e).getLength() + ( traci.edge.getLastStepVehicleNumber(e) * DEP_RATE) - ( (network.getEdge(e).getLength()/network.getEdge(e).getSpeed()) * DEP_RATE )
       # DTPOS model
       agents = traci.edge.getLastStepVehicleIDs(e)
-      edgelen = network.getEdge(e).getLength()/1000
+      edgelen = network.getEdge(e).getLength()
+      edgeSpeed = network.getEdge(e).getSpeed()
+      edgeMinTT = edgelen/edgeSpeed
 
-      costStore[e] = len(agents) * (0.5 * (edgelen)) * (0.5 * traffic[e])
-      traffic[e] = ((1 - EVAP_RATE) * traffic[e]) + trafficDelta(e, network, agents, edgelen)
+      #costStore[e] = len(agents) * (0.5 * (edgelen)) * (0.5 * traffic[e])
+      #traffic[e] = ((1 - EVAP_RATE) * traffic[e]) + trafficDelta(e, network, agents, edgelen)
+      #currCost = edgelen + (sum([10/(traci.vehicle.getSpeed(v)+0.01) for v in agents])
+      #costStore[e] += currCost
+      #costStore[e] = max( ( (costStore[e]) - (10 * traci.edge.getLastStepMeanSpeed(e)) ), 0)
+      costStore[e] = edgelen + traffic[e]
+      traffic[e] += 0.2 * (sum([1/(traci.vehicle.getSpeed(v)+0.01) for v in agents]))
 
-    # Parallelize
+      traffic[e] = max(0, traffic[e]/(0.2 * (edgelen/network.getEdge(e).getSpeed())) )
+
     threads = []
     newRoutes = {}
     for compliantV in set(presentAgents).intersection(compliantAgents):
-      traci.vehicle.setColor(compliantV, RED)
+      if traci.vehicle.getColor(compliantV) != RED:
+        traci.vehicle.setColor(compliantV, RED)
+
       currentRoad = traci.vehicle.getRoadID(compliantV)
       currentRoute = traci.vehicle.getRoute(compliantV)
       threads.append(Thread( # Can interchange between thread or process
@@ -450,47 +485,61 @@ def executeOptimized(compliantAgents, config, startCommand):
           currentRoad, 
           currentRoute, 
           newRoutes, 
+          routingTimeCost,
+          routingCount
           )
         )
       )
-    
     for t in threads:
       t.start()
 
     for t in threads:
       t.join()
 
+    # Traci calls are not threadsafe
     for key in newRoutes:
       traci.vehicle.setRoute(key, newRoutes[key])
 
     traci.simulationStep()
+    if len(traci.vehicle.getIDList()) < 1:
+      break
     
+  # Before close, gather average accum. wait time
+
   traci.close(False)
   time.sleep(1)
   print "\nDone."
-  return ACOMetrics(*averages(sumolist(config.logfile), compliantAgents))
+  print sum([routingCount[item] for item in routingCount]), " total reroutes"
+  return averages(sumolist(config.logfile), compliantAgents, waitTimes), routingTimeCost
 
 """ Setup and benchmarking """
 def main():
-  complianceFactor, config, gui = parseArgs()
-
+  timeForRecording = time.time()
+  complianceFactor, config, gui, csvFile = parseArgs()
   configPaths = SumoConfigWrapper(config)
   compliantAgents = getParticipatingAgents(complianceFactor, configPaths.routefile)
-  sumoGui = ["/usr/bin/sumo-gui", "-c", config]
-  sumoCmd = ["/usr/bin/sumo", "-c", config]
+  sumoGui = ["/usr/local/bin/sumo-gui", "-c", config]
+  sumoCmd = ["/usr/local/bin/sumo", "-c", config]
 
-  subprocess.call(sumoCmd, stderr = open(os.devnull, 'w'))
-  print "\n"
-  benchmarkResults = ACOMetrics(*averages(sumolist(configPaths.logfile), compliantAgents))
-  benchmarkResults.dumpMetrics()
-
-  #simulationResults = executeSimple(copy.deepcopy(compliantAgents), configPaths, sumoGui if gui else sumoCmd)
-  #print "Dumping metrics changes from simple ACO..."
-  #simulationResults.dumpMetrics()
-
-  simulationResults = executeOptimized(copy.deepcopy(compliantAgents), configPaths, sumoGui if gui else sumoCmd)
-  print "Dumping metrics changes from optimized (ph) ACO..."
+  simulationResults, routingTimeCost = executeOptimized(copy.deepcopy(compliantAgents), configPaths, sumoGui if gui else sumoCmd)
   simulationResults.dumpMetrics()
+
+  # Measure wait time and travel time of compliant and total agents. Also record execution time
+  # Record network and route file used
+  # Write everything of interest to a file
+  if csvFile != "nil":
+    with open(csvFile, 'a') as csv:
+      date = str(datetime.datetime.now())
+      compliantTravelTime = simulationResults.compliantAverageWaitTime
+      overallTravelTime = simulationResults.overallAverageTravelTime
+      compliantWaitTime = simulationResults.compliantAverageWaitTime
+      overallWaitTime = simulationResults.overallAverageWaitTime
+      averageRoutingTime = sum([routingTimeCost[item] for item in routingTimeCost]) / len(compliantAgents)
+      execSeconds = time.time() - starttime
+
+      csv.write(date +","+ compliantTravelTime +","+ overallTravelTime +","+ compliantWaitTime +","+ overallWaitTime +","+ complianceFactor +","+ averageRoutingTime +","+ execSeconds)
+
+
 
 ##################################################################################################################################
 ####################################################### LAUNCH ###################################################################
@@ -502,4 +551,3 @@ if __name__ == "__main__":
   print "Execution completed in %f seconds." % (time.time() - starttime)
 else:
   print __name__
-  exit(0)
