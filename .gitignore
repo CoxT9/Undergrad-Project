@@ -6,4 +6,4 @@ Project_Workspace/Basic_ACO/Logs.out.xml
 *pyc*
 *.sumocfg
 *.csv
-*.ACO_Sampling/ACOModel.py
+ACO_Sampling/ACOModel.py
