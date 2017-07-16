@@ -21,11 +21,18 @@ import traci
 
 NEIGHBOUR_LIM = 2
 
+# next:
+# zone_contains method
+# all unique pairs in a table,
+# ie: (n1, n2) => cost
+# The dict is (tuple) = [edge]
+
 class Zone(object):
   def __init__(self, center, network):
     self.network = network
     self.center = center
     self.memberNodes = self.buildZone(center)
+    self.optimalRoutes = self.setupRoutePairs(self.memberNodes)
 
   def buildZone(self, center):
     i = 0
@@ -33,7 +40,7 @@ class Zone(object):
     nodes = set()
     nodes.add(centerNode)
     self.collectNodes(nodes, centerNode, i)
-    print [node.getID() for node in nodes]
+    return [node.getID() for node in nodes]
 
   # for now, zones are effectively circular
   def collectNodes(self, collection, centerNode, stackdepth):
@@ -43,6 +50,22 @@ class Zone(object):
         self.collectNodes(collection, n, stackdepth+1)
 
     collection.add(centerNode)
+
+  def setupRoutePairs(self, nodes):
+    # route pairs init with dijkstra
+    routes = {}
+    for index, node1 in enumerate(nodes):
+      for node2 in nodes[:index]+nodes[index+1:]:
+        routes[(node1, node2)] = dijkstra(node1, node2, self.network)
+
+    return routes
+
+  def updateRoutePairs(self):
+    # Change table on traffic change
+    pass
+
+  def __contains__(self, nodeId):
+    return nodeId in self.memberNodes
 
 class SumoConfigWrapper(object):
   def __init__(self, configfile):
@@ -72,6 +95,58 @@ def parseArgs():
   gui = bool(int(sys.argv[3]))
   csvFile = sys.argv[4]
   return complianceFactor, config, gui, csvFile
+
+""" Some old fashioned Dijkstra. Find the shortest path from @srcEdge to @destEdge on @network using @weights """
+def dijkstra(src, dest, network, weights=None):
+  if weights == None:
+    weights = {}
+    for e in network.getEdges():
+      weights[e.getID()] = e.getLength()
+
+  if src == dest:
+    return [dest]
+
+  unvisited = {src}
+  visited = set()
+
+  totalCost = {src: 0}
+  candidates = {}
+
+  while unvisited:
+    # Pick smallest weight
+    current = min( [ (totalCost[node], node) for node in unvisited] )[1]
+    if current == dest:
+      break
+
+    unvisited.discard(current)
+    visited.add(current)
+
+    connectedNodesToEdges = {}
+    for edge in network.getNode(current).getOutgoing():
+      connectedNodesToEdges[network.getEdge(edge.getID()).getToNode().getID()] = edge.getID()
+
+    unvisitedNeighbours = set(connectedNodesToEdges.keys()).difference(visited)
+    for neighbour in unvisitedNeighbours:
+      print connectedNodesToEdges[neighbour]
+      nei_dist = totalCost[current] + weights[connectedNodesToEdges[neighbour]]
+      if nei_dist < totalCost.get(neighbour, float('inf')):
+        totalCost[neighbour] = nei_dist
+        candidates[neighbour] = current
+        unvisited.add(neighbour)
+
+  result = unpackPath(candidates, dest)
+  return result
+
+""" Dijkstra utility function """
+def unpackPath(candidates, dest):
+  if dest not in candidates:
+    return None
+  goal = dest
+  path = []
+  while goal:
+    path.append(goal)
+    goal = candidates.get(goal)
+  return list(reversed(path))
 
 """ Setup and benchmarking """
 def main():
