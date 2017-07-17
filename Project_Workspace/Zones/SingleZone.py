@@ -31,25 +31,29 @@ class Zone(object):
   def __init__(self, center, network):
     self.network = network
     self.center = center
-    self.memberNodes = self.buildZone(center)
+    self.memberNodes, self.borderNodes = self.buildZone(center)
     self.optimalRoutes = self.setupRoutePairs(self.memberNodes)
 
   def buildZone(self, center):
     i = 0
     centerNode = self.network.getNode(center)
     nodes = set()
+    borderNodes = set()
     nodes.add(centerNode)
-    self.collectNodes(nodes, centerNode, i)
-    return [node.getID() for node in nodes]
+    self.collectNodes(nodes, borderNodes, centerNode, i)
+    return [node.getID() for node in nodes], [node.getID() for node in borderNodes ]
 
   # for now, zones are effectively circular
-  def collectNodes(self, collection, centerNode, stackdepth):
+  def collectNodes(self, collection, borderNodes, centerNode, stackdepth):
     if stackdepth < NEIGHBOUR_LIM:
       neighbours = [edge.getToNode() for edge in centerNode.getOutgoing()]
       for n in neighbours:
-        self.collectNodes(collection, n, stackdepth+1)
+        self.collectNodes(collection, borderNodes, n, stackdepth+1)
 
     collection.add(centerNode)
+
+    if stackdepth == NEIGHBOUR_LIM:
+      borderNodes.add(centerNode)
 
   def setupRoutePairs(self, nodes):
     # route pairs init with dijkstra
@@ -127,7 +131,6 @@ def dijkstra(src, dest, network, weights=None):
 
     unvisitedNeighbours = set(connectedNodesToEdges.keys()).difference(visited)
     for neighbour in unvisitedNeighbours:
-      print connectedNodesToEdges[neighbour]
       nei_dist = totalCost[current] + weights[connectedNodesToEdges[neighbour]]
       if nei_dist < totalCost.get(neighbour, float('inf')):
         totalCost[neighbour] = nei_dist
@@ -148,6 +151,13 @@ def unpackPath(candidates, dest):
     goal = candidates.get(goal)
   return list(reversed(path))
 
+def isValidZoneCenter(node):
+  return len( node.getOutgoing() > 1)
+
+def assignNodesToZones(network, nodes):
+  # Zone-network coverage here
+  pass
+
 """ Setup and benchmarking """
 def main():
   complianceFactor, config, gui, csvFile = parseArgs()
@@ -160,6 +170,11 @@ def main():
   network = sumolib.net.readNet(configPaths.networkfile)
   nodes = [ i.getID() for i in network.getNodes() ]
 
+  # Best way to generate zones for whole network:
+  # Keep a structure of zones
+  # until every node is in >0 zones, continue. If a node is already in two nodes, skip
+  # this will probably result in tight overlap
+  zoneStore = assignNodesToZones(network, nodes)
   zoneCenter = random.choice(nodes)
   myZone = Zone(zoneCenter, network)
   print zoneCenter
