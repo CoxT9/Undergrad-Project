@@ -20,6 +20,9 @@ import sumolib
 import traci
 
 NEIGHBOUR_LIM = 2
+MEMBERSHIP_LIM = 5 # Consider minimum zone coverage
+
+# TraCI colors
 
 # next:
 # zone_contains method
@@ -28,10 +31,20 @@ NEIGHBOUR_LIM = 2
 # The dict is (tuple) = [edge]
 
 class Zone(object):
-  def __init__(self, center, network):
+  def __init__(self, center, network, memberNodes=None, borderNodes=None):
+    self.color = (
+      random.sample( xrange(0, 255), 1)[0], 
+      random.sample( xrange(0, 255), 1)[0], 
+      random.sample( xrange(0, 255), 1)[0], 
+    0)
     self.network = network
     self.center = center
-    self.memberNodes, self.borderNodes = self.buildZone(center)
+    if memberNodes == None or borderNodes == None:
+      self.memberNodes, self.borderNodes = self.buildZone(center)
+    else:
+      self.memberNodes = list(memberNodes)
+      self.borderNodes = list(borderNodes)
+
     self.optimalRoutes = self.setupRoutePairs(self.memberNodes)
 
   def buildZone(self, center):
@@ -40,20 +53,12 @@ class Zone(object):
     nodes = set()
     borderNodes = set()
     nodes.add(centerNode)
-    self.collectNodes(nodes, borderNodes, centerNode, i)
-    return [node.getID() for node in nodes], [node.getID() for node in borderNodes ]
+    collectNodes(nodes, borderNodes, centerNode, i)
+    return list(nodes), list(borderNodes)
 
-  # for now, zones are effectively circular
-  def collectNodes(self, collection, borderNodes, centerNode, stackdepth):
-    if stackdepth < NEIGHBOUR_LIM:
-      neighbours = [edge.getToNode() for edge in centerNode.getOutgoing()]
-      for n in neighbours:
-        self.collectNodes(collection, borderNodes, n, stackdepth+1)
-
-    collection.add(centerNode)
-
-    if stackdepth == NEIGHBOUR_LIM:
-      borderNodes.add(centerNode)
+  def updateRoutePairs(self):
+    # Change table on traffic change
+    pass
 
   def setupRoutePairs(self, nodes):
     # route pairs init with dijkstra
@@ -63,10 +68,6 @@ class Zone(object):
         routes[(node1, node2)] = dijkstra(node1, node2, self.network)
 
     return routes
-
-  def updateRoutePairs(self):
-    # Change table on traffic change
-    pass
 
   def __contains__(self, nodeId):
     return nodeId in self.memberNodes
@@ -99,6 +100,19 @@ def parseArgs():
   gui = bool(int(sys.argv[3]))
   csvFile = sys.argv[4]
   return complianceFactor, config, gui, csvFile
+
+# for now, zones are effectively circular
+""" Given @centerNode, return a list of nodes in the zone, and nodes of the zone's border """
+def collectNodes(collection, borderNodes, centerNode, stackdepth=0):
+  if stackdepth < NEIGHBOUR_LIM:
+    neighbours = [edge.getToNode() for edge in centerNode.getOutgoing()]
+    for n in neighbours:
+      collectNodes(collection, borderNodes, n, stackdepth+1)
+
+  collection.add(centerNode.getID())
+
+  if stackdepth == NEIGHBOUR_LIM:
+    borderNodes.add(centerNode.getID())
 
 """ Some old fashioned Dijkstra. Find the shortest path from @srcEdge to @destEdge on @network using @weights """
 def dijkstra(src, dest, network, weights=None):
@@ -152,11 +166,68 @@ def unpackPath(candidates, dest):
   return list(reversed(path))
 
 def isValidZoneCenter(node):
-  return len( node.getOutgoing() > 1)
+  return len(node.getOutgoing()) > 1
 
+# What is the fastest/best way to ensure all nodes belong to at least 1 zone?
+# vertex cover?
 def assignNodesToZones(network, nodes):
   # Zone-network coverage here
-  pass
+  zoneStore = []
+  nodeToZones = {value:[] for value in nodes}
+  nodeZoneMembership = {value:0 for value in nodes} # id to 0
+
+  done = False
+
+  while not done:
+    # look for a node not yet in at least 1 zone
+    # the issue here is that zones also can't be in more than 2 zones.
+    print nodeZoneMembership.values()
+   # time.sleep(3)
+    # Take a node. Is it a valid center? Is it in under 2 zones? 
+    # If yes, take the node's neighbor candidates. Are they all in under 2 ones?
+    # If yes, make the zone and update the node-zone appearance table
+    # else, next node
+    for node in nodeZoneMembership.keys():
+      if isValidZoneCenter(network.getNode(node)) and nodeZoneMembership[node] < MEMBERSHIP_LIM:
+        candidateNodes = set()
+        candidateBorders = set()
+        collectNodes(candidateNodes, candidateBorders, network.getNode(node))
+
+        if MEMBERSHIP_LIM not in [nodeZoneMembership[cand] for cand in candidateNodes]: # this zone will not break the limit
+          newZone = Zone(node, network, candidateNodes, candidateBorders)
+          zoneStore.append(newZone)
+          for member in newZone.memberNodes:
+            nodeZoneMembership[member] += 1
+            # Each node belongs to a list of zones
+            nodeToZones[member].append(newZone)
+
+
+    done = 0 not in nodeZoneMembership.values()
+
+  return zoneStore, nodeToZones
+
+def launchSim(zoneStore, nodeToZoneDict, network, sim, config):
+  traci.start(sim)
+
+  for _ in xrange(int(config.endtime)):
+    # Color the vehicles on each edge based on their source node
+    for edge in traci.edge.getIDList():
+      if edge[0] != ":":
+        edgeOccupants = traci.edge.getLastStepVehicleIDs(edge)
+        fromNode = network.getEdge(edge).getFromNode().getID()
+        # get Zone of fromNode, and use that color
+        currZone = nodeToZoneDict[fromNode][0] # The first zone this node belongs to
+        color = currZone.color
+        for agent in edgeOccupants:
+          traci.vehicle.setColor(agent, color)
+
+
+    traci.simulationStep()
+    if len(traci.vehicle.getIDList()) < 1:
+      break
+
+  traci.close(False)
+  print "Completed Execution."
 
 """ Setup and benchmarking """
 def main():
@@ -168,16 +239,13 @@ def main():
 
   # Pick a node
   network = sumolib.net.readNet(configPaths.networkfile)
-  nodes = [ i.getID() for i in network.getNodes() ]
+  nodes = [node.getID() for node in network.getNodes()]
 
-  # Best way to generate zones for whole network:
-  # Keep a structure of zones
-  # until every node is in >0 zones, continue. If a node is already in two nodes, skip
-  # this will probably result in tight overlap
-  zoneStore = assignNodesToZones(network, nodes)
-  zoneCenter = random.choice(nodes)
-  myZone = Zone(zoneCenter, network)
-  print zoneCenter
+  zoneStore, nodeToZones = assignNodesToZones(network, nodes) # Collection of zones which cover the graph
+  exc = sumoGui if gui else sumoCmd
+  launchSim(zoneStore, nodeToZones, network, exc, configPaths)
+  # First, run TraCI and color vehicles differently based on the zone
+  print len(zoneStore)
 
 if __name__ == "__main__":
   starttime = time.time()
