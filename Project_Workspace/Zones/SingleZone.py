@@ -7,12 +7,15 @@
 - Color vehicles inside a zone
 - Setup intra zone routing tables
 - Path traversal problem
+- Need to parallelize 
 """
 
 import os
 import random
 import sys
 import time
+
+from threading import Thread
 
 sys.path.append(os.path.join(os.environ["SUMO_HOME"], "tools"))
 
@@ -173,8 +176,6 @@ def unpackPath(candidates, dest):
 def isValidZoneCenter(node):
   return len(node.getOutgoing()) > 1
 
-# What is the fastest/best way to ensure all nodes belong to at least 1 zone?
-# vertex cover?
 def assignNodesToZones(network, nodes):
   # Zone-network coverage here
   zoneStore = []
@@ -184,14 +185,6 @@ def assignNodesToZones(network, nodes):
   done = False
 
   while not done:
-    # look for a node not yet in at least 1 zone
-    # the issue here is that zones also can't be in more than 2 zones.
-    print nodeZoneMembership.values()
-   # time.sleep(3)
-    # Take a node. Is it a valid center? Is it in under 2 zones? 
-    # If yes, take the node's neighbor candidates. Are they all in under 2 ones?
-    # If yes, make the zone and update the node-zone appearance table
-    # else, next node
     for node in nodeZoneMembership.keys():
       if isValidZoneCenter(network.getNode(node)) and nodeZoneMembership[node] < MEMBERSHIP_LIM:
         candidateNodes = set()
@@ -206,13 +199,22 @@ def assignNodesToZones(network, nodes):
             # Each node belongs to a list of zones
             nodeToZones[member].append(newZone)
 
-
     done = 0 not in nodeZoneMembership.values()
 
   return zoneStore, nodeToZones
 
 def getExplicitEdges():
   return [ edge for edge in traci.edge.getIDList() if edge[0] != ":"]
+
+def updateRoutePairsConcurrentCaller(zone, weights):
+  zone.updateRoutePairs(weights)
+
+def runThreads(threads):
+  for t in threads:
+    t.start()
+
+  for t in threads:
+    t.join()
 
 def launchSim(zoneStore, nodeToZoneDict, network, sim, config):
   traci.start(sim)
@@ -239,8 +241,18 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config):
       traffic[edge] = max(0, traffic[edge]/(0.2 * (edgelen/network.getEdge(edge).getSpeed())) )
 
     # With up-to-date traffic levels, update zone proactive route tables
+    # Zone update can be parallelized. For now place into threads
+    threads = []
     for z in zoneStore:
-      z.updateRoutePairs(costStore)
+      threads.append(Thread(
+        target=updateRoutePairsConcurrentCaller,
+        args=(
+          z,
+          costStore,
+          )
+        )
+      )
+    runThreads(threads)
 
     traci.simulationStep()
     if len(traci.vehicle.getIDList()) < 1:
