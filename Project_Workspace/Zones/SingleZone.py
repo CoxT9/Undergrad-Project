@@ -56,9 +56,14 @@ class Zone(object):
     collectNodes(nodes, borderNodes, centerNode, i)
     return list(nodes), list(borderNodes)
 
-  def updateRoutePairs(self):
-    # Change table on traffic change
-    pass
+  def updateRoutePairs(self, weights):
+    # Update pairs table on traffic change
+    newOptimalRoutes = {}
+
+    for src, dest in self.optimalRoutes:
+      newOptimalRoutes[(src, dest)] = dijkstra(src, dest, self.network, weights)
+
+    self.optimalRoutes = newOptimalRoutes
 
   def setupRoutePairs(self, nodes):
     # route pairs init with dijkstra
@@ -206,21 +211,36 @@ def assignNodesToZones(network, nodes):
 
   return zoneStore, nodeToZones
 
+def getExplicitEdges():
+  return [ edge for edge in traci.edge.getIDList() if edge[0] != ":"]
+
 def launchSim(zoneStore, nodeToZoneDict, network, sim, config):
   traci.start(sim)
+  edges = getExplicitEdges()
+  costStore = {value:0 for value in edges}
+  traffic = {value:0 for value in edges}
 
   for _ in xrange(int(config.endtime)):
     # Color the vehicles on each edge based on their source node
-    for edge in traci.edge.getIDList():
-      if edge[0] != ":":
-        edgeOccupants = traci.edge.getLastStepVehicleIDs(edge)
-        fromNode = network.getEdge(edge).getFromNode().getID()
-        # get Zone of fromNode, and use that color
-        currZone = nodeToZoneDict[fromNode][0] # The first zone this node belongs to
-        color = currZone.color
-        for agent in edgeOccupants:
-          traci.vehicle.setColor(agent, color)
+    for edge in edges:
+      edgeOccupants = traci.edge.getLastStepVehicleIDs(edge)
+      fromNode = network.getEdge(edge).getFromNode().getID()
+      # get Zone of fromNode, and use that color
+      currZone = nodeToZoneDict[fromNode][0] # The first zone this node belongs to
+      color = currZone.color
+      for agent in edgeOccupants:
+        traci.vehicle.setColor(agent, color)
 
+      # Update edge ph at each step
+      edgelen = network.getEdge(edge).getLength()
+      costStore[edge] = edgelen + traffic[edge]
+      traffic[edge] += 0.2 * (sum([1/(traci.vehicle.getSpeed(v)+0.01) for v in edgeOccupants]))
+
+      traffic[edge] = max(0, traffic[edge]/(0.2 * (edgelen/network.getEdge(edge).getSpeed())) )
+
+    # With up-to-date traffic levels, update zone proactive route tables
+    for z in zoneStore:
+      z.updateRoutePairs(costStore)
 
     traci.simulationStep()
     if len(traci.vehicle.getIDList()) < 1:
