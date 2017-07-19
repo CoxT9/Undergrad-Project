@@ -23,15 +23,13 @@ import sumolib
 import traci
 
 NEIGHBOUR_LIM = 2
-MEMBERSHIP_LIM = 5 # Consider minimum zone coverage
+MEMBERSHIP_LIM = 5
 
-# TraCI colors
 
 # next:
-# zone_contains method
-# all unique pairs in a table,
-# ie: (n1, n2) => cost
-# The dict is (tuple) = [edge]
+# Multi zone traversal
+# More parallelizing and finer-grained partitioning
+# Minimal zone coverage and dynamic zones
 
 class Zone(object):
   def __init__(self, center, network, memberNodes=None, borderNodes=None):
@@ -48,6 +46,7 @@ class Zone(object):
       self.memberNodes = list(memberNodes)
       self.borderNodes = list(borderNodes)
 
+    # Should a zone's routes only include nodes in the zone?
     self.optimalRoutes = self.setupRoutePairs(self.memberNodes)
 
   def buildZone(self, center):
@@ -173,6 +172,27 @@ def unpackPath(candidates, dest):
     goal = candidates.get(goal)
   return list(reversed(path))
 
+""" Convert list of vertices to list of edges. This crucial for interopability between graph traversal algorithms and SUMO APIs """
+def edgeListConvert(vertexList, edgesStore):
+  edgeList = []
+  i = 0
+  while i < len(vertexList)-1:
+    edgeList.append( edgesStore[ (vertexList[i], vertexList[i+1]) ] )
+    i += 1
+
+  return edgeList
+
+""" build a table of (node, node) => edge """
+def buildEdgesStore(network, edges):
+  store = {}
+  for e in edges:
+    edge = network.getEdge(e)
+    toNode = edge.getToNode().getID()
+    fromNode = edge.getFromNode().getID()
+    store[(fromNode, toNode)] = e
+
+  return store
+
 def isValidZoneCenter(node):
   return len(node.getOutgoing()) > 1
 
@@ -222,12 +242,14 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config):
   costStore = {value:0 for value in edges}
   traffic = {value:0 for value in edges}
 
+  edgesStore = buildEdgesStore(network, edges)
+
   for _ in xrange(int(config.endtime)):
-    # Color the vehicles on each edge based on their source node
+
     for edge in edges:
       edgeOccupants = traci.edge.getLastStepVehicleIDs(edge)
       fromNode = network.getEdge(edge).getFromNode().getID()
-      # get Zone of fromNode, and use that color
+
       currZone = nodeToZoneDict[fromNode][0] # The first zone this node belongs to
       color = currZone.color
       for agent in edgeOccupants:
@@ -241,7 +263,6 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config):
       traffic[edge] = max(0, traffic[edge]/(0.2 * (edgelen/network.getEdge(edge).getSpeed())) )
 
     # With up-to-date traffic levels, update zone proactive route tables
-    # Zone update can be parallelized. For now place into threads
     threads = []
     for z in zoneStore:
       threads.append(Thread(
@@ -253,6 +274,29 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config):
         )
       )
     runThreads(threads)
+
+    for v in traci.vehicle.getIDList():
+      currEdge = traci.vehicle.getRoadID(v)
+      destNode = network.getEdge(traci.vehicle.getRoute(v)[-1]).getToNode()
+
+      # Optimize at the last mile
+      # Next, string zones together to find shortest paths between them
+      # After that, smooth out the edges and start running experiments
+      if currEdge in edges and network.getEdge(currEdge).getToNode != destNode: # No point in optimizing the path if v is about to hit destination
+        nextNode = network.getEdge(currEdge).getToNode().getID()
+        
+        currZones = nodeToZoneDict[nextNode] 
+        i = 0
+        found = False
+        while not found and i < len(currZones):
+          selection = currZones[i]
+          if destNode in selection.memberNodes:
+            found = True
+          i += 1
+
+        if found:
+          nodeList = selection.optimalRoutes[(nextNode, destNode)]
+          traci.vehicle.setRoute(v, edgeListConvert(nodeList, edgesStore))
 
     traci.simulationStep()
     if len(traci.vehicle.getIDList()) < 1:
@@ -273,11 +317,9 @@ def main():
   network = sumolib.net.readNet(configPaths.networkfile)
   nodes = [node.getID() for node in network.getNodes()]
 
-  zoneStore, nodeToZones = assignNodesToZones(network, nodes) # Collection of zones which cover the graph
+  zoneStore, nodeToZones = assignNodesToZones(network, nodes)
   exc = sumoGui if gui else sumoCmd
   launchSim(zoneStore, nodeToZones, network, exc, configPaths)
-  # First, run TraCI and color vehicles differently based on the zone
-  print len(zoneStore)
 
 if __name__ == "__main__":
   starttime = time.time()
