@@ -3,10 +3,9 @@
 # First, assume a zone has a radius of two. pick a node and use it to form a zone.
 # Some code repition from the first ACO-SUMO project but that's alright
 """ Next:
-- Criteria for zone center
-- Color vehicles inside a zone
-- Setup intra zone routing tables
-- Path traversal problem
+- Reduce zone overlap
+- Stricter partitioning (zone routes should not leave zone)
+- Zone traversal
 - Need to parallelize 
 """
 
@@ -22,17 +21,11 @@ sys.path.append(os.path.join(os.environ["SUMO_HOME"], "tools"))
 import sumolib
 import traci
 
-NEIGHBOUR_LIM = 2
-MEMBERSHIP_LIM = 5
-
-
-# next:
-# Multi zone traversal
-# More parallelizing and finer-grained partitioning
-# Minimal zone coverage and dynamic zones
+NEIGHBOUR_LIM = 2 # A zone is constructed with r hops from center
+MEMBERSHIP_LIM = 5 # A node may only be a member of up to n nodes
 
 class Zone(object):
-  def __init__(self, center, network, memberNodes=None, borderNodes=None):
+  def __init__(self, id, center, network, memberNodes=None, borderNodes=None):
     self.color = (
       random.sample( xrange(0, 255), 1)[0], 
       random.sample( xrange(0, 255), 1)[0], 
@@ -46,8 +39,10 @@ class Zone(object):
       self.memberNodes = list(memberNodes)
       self.borderNodes = list(borderNodes)
 
-    # Should a zone's routes only include nodes in the zone?
+    self.connectedZones = {} # Which zones _self_ connects to, and which nodes connect _self_ with other zones
+
     self.optimalRoutes = self.setupRoutePairs(self.memberNodes)
+    self.id = "z"+str(id)
 
   def buildZone(self, center):
     i = 0
@@ -78,6 +73,13 @@ class Zone(object):
 
   def __contains__(self, nodeId):
     return nodeId in self.memberNodes
+
+  def __str__(self):
+    return self.id
+
+  def __repr__(self):
+    return self.id
+
 
 class SumoConfigWrapper(object):
   def __init__(self, configfile):
@@ -197,12 +199,12 @@ def isValidZoneCenter(node):
   return len(node.getOutgoing()) > 1
 
 def assignNodesToZones(network, nodes):
-  # Zone-network coverage here
   zoneStore = []
   nodeToZones = {value:[] for value in nodes}
   nodeZoneMembership = {value:0 for value in nodes} # id to 0
 
   done = False
+  i = 0
 
   while not done:
     for node in nodeZoneMembership.keys():
@@ -212,7 +214,8 @@ def assignNodesToZones(network, nodes):
         collectNodes(candidateNodes, candidateBorders, network.getNode(node))
 
         if MEMBERSHIP_LIM not in [nodeZoneMembership[cand] for cand in candidateNodes]: # this zone will not break the limit
-          newZone = Zone(node, network, candidateNodes, candidateBorders)
+          newZone = Zone(i, node, network, candidateNodes, candidateBorders)
+          i += 1
           zoneStore.append(newZone)
           for member in newZone.memberNodes:
             nodeZoneMembership[member] += 1
@@ -220,6 +223,15 @@ def assignNodesToZones(network, nodes):
             nodeToZones[member].append(newZone)
 
     done = 0 not in nodeZoneMembership.values()
+
+  for zone in zoneStore:
+    for node in zone.memberNodes:
+      connectedZones = [ z for z in nodeToZones[node] if z != zone ]
+      for z in connectedZones:
+        if z in zone.connectedZones:
+          zone.connectedZones[z].append(node)
+        else:
+          zone.connectedZones[z] = [node]
 
   return zoneStore, nodeToZones
 
@@ -313,7 +325,6 @@ def main():
   sumoGui = ["/usr/local/bin/sumo-gui", "-c", config]
   sumoCmd = ["/usr/local/bin/sumo", "-c", config]
 
-  # Pick a node
   network = sumolib.net.readNet(configPaths.networkfile)
   nodes = [node.getID() for node in network.getNodes()]
 
