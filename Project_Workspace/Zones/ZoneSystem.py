@@ -1,13 +1,14 @@
-# Working with partitioning a SUMO network into zones.
-
-# First, assume a zone has a radius of two. pick a node and use it to form a zone.
-# Some code repition from the first ACO-SUMO project but that's alright
-""" Next:
-- Reduce zone overlap
-- Stricter partitioning (zone routes should not leave zone)
-- Zone traversal
-- Need to parallelize 
 """
+Zone routing SUMO and TraCI.
+The network is partitioned into zones,
+the path between every pair of nodes within one zone is cached proactively (updated on changes),
+the path between multiple zones is evaluated on-demand (reactively).
+
+Ongoing challenges:
+Finer grain partitioning, less overlap, higher parallelism, improved performance
+"""
+# Still to do:
+# Run experiments
 
 import copy
 import os
@@ -31,7 +32,8 @@ class Zone(object):
       random.sample( xrange(0, 255), 1)[0], 
       random.sample( xrange(0, 255), 1)[0], 
       random.sample( xrange(0, 255), 1)[0], 
-    0)
+      0
+    )
     self.network = network
     self.center = center
     if memberNodes == None or borderNodes == None:
@@ -41,8 +43,6 @@ class Zone(object):
       self.borderNodes = list(borderNodes)
 
     self.connectedZones = {} # Which zones _self_ connects to, and which nodes connect _self_ with other zones
-    # This is not overlapping nodes, this is overlapping or adjacent nodes. need to store the cost from z1 to z2 (ie: the cost of the edge that connects the two nodes)
-    # In fact this probably isn't even necessary. Could think about which zones each member node connects to.
 
     self.optimalRoutes = self.setupRoutePairs(self.memberNodes)
     self.id = "z"+str(id)
@@ -85,9 +85,10 @@ class Zone(object):
 
 
 class SumoConfigWrapper(object):
-  def __init__(self, configfile):
+  def __init__(self, configfile, guiOn):
     self.configfile = configfile
     self.networkfile, self.routefile, self.logfile, self.endtime = self.parsecfg(configfile)
+    self.gui = guiOn
 
   def parsecfg(self, config):
     network = sumogenerator(config, entity="net-file").next().value
@@ -124,7 +125,6 @@ def parseArgs():
   csvFile = sys.argv[4]
   return complianceFactor, config, gui, csvFile
 
-# for now, zones are effectively circular
 """ Given @centerNode, return a list of nodes in the zone, and nodes of the zone's border """
 def collectNodes(collection, borderNodes, centerNode, stackdepth=0):
   collection.add(centerNode.getID())
@@ -138,8 +138,6 @@ def collectNodes(collection, borderNodes, centerNode, stackdepth=0):
     
     for n in neighbours:
       collectNodes(collection, borderNodes, n, stackdepth+1)
-
-
 
 """ Some old fashioned Dijkstra. Find the shortest path from @srcEdge to @destEdge on @network using @weights """
 def dijkstra(src, dest, network, weights=None):
@@ -191,114 +189,6 @@ def unpackPath(candidates, dest):
     path.append(goal)
     goal = candidates.get(goal)
   return list(reversed(path))
-
-""" Dijkstra's scaled up to zones """
-def shortestInterZonePathOLD(srcZones, srcNode, destNode, nodeToZoneMap, weights, edgesStore):
-  # Literally run dijkstra's and link together paths from zones
-  # Make sure to swap the vertex list back into an edge list for traci api
-  #path = [srcNode]
-  srcZone = srcZones[0]
-
-  if srcNode == destNode:
-    return [destNode]
-
-  unvisited = {srcZone}
-  visited = set()
-
-  totalCost = {srcZone: 0}
-  candidates = {}
-
-  while unvisited:
-    # Pick smallest weight
-    current = min( [ (totalCost[zone], zone) for zone in unvisited] )[1]
-    if current in nodeToZoneMap[destNode]:
-      break
-
-    unvisited.discard(current)
-    visited.add(current)
-
-    connectedZonesToEdges = {}
-    #for edge in network.getNode(current).getOutgoing():
-    for neighbour in current.connectedZones:
-      connectorEdges = current.connectedZones[neighbour]
-      # for now, take min cost. If a path exists between 2 zones, take the cheapest edge?
-      # This should not use dijkstra. We actually should work with the HOPNET approach
-      # build up paths until at dest node, then decide which path is shorter from reverse
-      connectorEdge = min(connectorEdges, key=lambda k: weights[k])
-      connectedZonesToEdges[neighbour] = connectorEdge
-
-    unvisitedNeighbours = set(connectedZonesToEdges.keys()).difference(visited)
-    for neighbour in unvisitedNeighbours:
-      nei_dist = totalCost[current] + weights[connectedZonesToEdges[neighbour]]
-      if nei_dist < totalCost.get(neighbour, float('inf')):
-        totalCost[neighbour] = nei_dist
-        candidates[neighbour] = current
-        unvisited.add(neighbour)
-
-  # Need to string together path of nodes somehow
-  result = gatherZonePaths(candidates, destNode, nodeToZoneMap)
-
-  print srcZone
-  print nodeToZoneMap[destNode]
-  print candidates
-  for z in nodeToZoneMap[destNode]:
-    print z, candidates[z]
-
-  print result
-  # result gives us a list of zone sequences. We have to find the cheapest one
-  # Find the cheapest node by working backwards
-  # here's the trick: this thing just gave us multiple paths
-  # look at all the paths, take only the minimal overall.
-  paths = []
-  for zoneSeq in result:
-    # first entry has the source
-    for index, zone in enumerate(zoneSeq):
-      print zoneSeq
-
-  print srcZone
-  print "------------"
-
-  print srcZones
-  print nodeToZoneMap[destNode]
-  print srcNode
-  print destNode
-  for z in srcZones:
-    print z, sorted([int(x) for x in z.memberNodes])
-
-  for zp in nodeToZoneMap[destNode]:
-    print zp, sorted([int(y) for y in zp.memberNodes])
-
-  print "-/-/-/-/-/-/-/--//--/-/-/-/-/-/-"
-  paths = [ [] ]
-  for z in nodeToZoneDict[srcNode]:
-    getInterZonePaths(srcNode, destNode, z, nodeToZoneDict, paths)
-  print "ggggg"
-  return "foo"
-  #return result
-
-
-def interZonePaths(srcNode, destNode, srcZone, nodeToZoneMap):
-  # srcZone is the (a) zone srcNode belongs in
-  if destNode == srcNode:
-    return [destNode]
-  elif destNode in srcZone.memberNodes:
-    return srcZones.optimalRoutes[(srcNode, destNode)]
-  else:
-    for neighbour in srcZone.connectedZones:
-      borderNodes = srcZone.connectedZones[neighbour]
-
-""" Zone-Traversal utility function """
-def gatherZonePaths(candidates, destNode, nodeToZoneMap):
-  paths = []
-  for dest in nodeToZoneMap[destNode]:
-    if dest in candidates:
-      goal = dest
-      path = []
-      while goal:
-        path.append(goal)
-        goal = candidates.get(goal)
-    paths.append(list(reversed(path)))
-  return paths
 
 """ Convert list of vertices to list of edges. This crucial for interopability between graph traversal algorithms and SUMO APIs """
 def edgeListConvert(vertexList, edgesStore):
@@ -358,30 +248,6 @@ def assignNodesToZones(network, nodes):
 
     done = 0 not in nodeZoneMembership.values()
 
-  # for zone in zoneStore:
-  #   for node in zone.memberNodes:
-  #     # Take all the outgoing edges of this node. See what zones that edge links to. These are the zone's neighbours
-  #     outgoingEdges = [edge.getID() for edge in network.getNode(node).getOutgoing()]
-  #     for edge in outgoingEdges:
-  #       toNode = network.getEdge(edge).getToNode().getID()
-  #       endpointZones = nodeToZones[toNode]
-
-  #       for z in endpointZones:
-  #         if z != zone: # Avoid 1 zone cycles
-  #           if z in zone.connectedZones:
-  #             zone.connectedZones[z].append(edge)  # this should be a node. 1 zone cycle?
-  #           else:
-  #             zone.connectedZones[z] = [edge]
-
-  # for z in zoneStore:
-  #   for bord in z.borderNodes:
-  #     for zprime in nodeToZones[bord]:
-  #       if zprime != z:
-  #         if zprime in z.connectedZones:
-  #           z.connectedZones[zprime].append(mem)
-  #         else:
-  #           z.connectedZones[zprime] = [mem]
-
   return zoneStore, nodeToZones
 
 def getExplicitEdges():
@@ -406,16 +272,16 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config):
   edgesStore = buildEdgesStore(network, edges)
 
   for _ in xrange(int(config.endtime)):
-    print _
 
     for edge in edges:
       edgeOccupants = traci.edge.getLastStepVehicleIDs(edge)
       fromNode = network.getEdge(edge).getFromNode().getID()
 
-      currZone = nodeToZoneDict[fromNode][0] # The first zone this node belongs to
-      color = currZone.color
-      for agent in edgeOccupants:
-        traci.vehicle.setColor(agent, color)
+      if config.gui:
+        currZone = nodeToZoneDict[fromNode][0] # The first zone this node belongs to
+        color = currZone.color
+        for agent in edgeOccupants:
+          traci.vehicle.setColor(agent, color)
 
       # Update edge ph at each step
       edgelen = network.getEdge(edge).getLength()
@@ -425,6 +291,7 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config):
       traffic[edge] = max(0, traffic[edge]/(0.2 * (edgelen/network.getEdge(edge).getSpeed())) )
 
     # With up-to-date traffic levels, update zone proactive route tables
+    # Try to optimize this
     threads = []
     for z in zoneStore:
       threads.append(Thread(
@@ -443,26 +310,16 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config):
 
       # String zones together for shortest path
       if currEdge in edges and network.getEdge(currEdge).getToNode != destNode: # No point in optimizing the path if v is about to hit destination
-        startNode = network.getEdge(currEdge).getToNode().getID()
-        srcNode = startNode
+        srcNode = network.getEdge(currEdge).getToNode().getID()
         resultPath = []
         currPath = []
 
         scoreTable = {"bestPath":[], "bestCost":sys.maxint}
-       # print srcNode
-       # print destNode.getID()
         shortestZonePath([], srcNode, destNode.getID(), nodeToZoneDict, scoreTable, currPath, edgesStore, costStore, network)
         resultPath = scoreTable["bestPath"]
 
-        # it runs way too slow and finds way too many paths
-
-        # prune to min cost path
-       # exit(0)
         newRoute = edgeListConvert(resultPath, edgesStore)
-
         traci.vehicle.setRoute(v, [currEdge]+newRoute)
-        #raise Exception("foo")
-        #traci.vehicle.setRoute(v, shortestInterZonePathOLD(nodeToZoneDict[startNode], startNode, destNode.getID(), nodeToZoneDict, costStore, edgesStore) )
 
     traci.simulationStep()
     if len(traci.vehicle.getIDList()) < 1:
@@ -525,39 +382,10 @@ def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable
             network
           )
 
-
-def getInterZonePaths_old(visitedZones, srcNode, destNode, srcZone, nodeToZoneDict, paths, currPath):
-  # paths is an array of arrays
- # for p in paths:
- #   if destNode in p:
- #     return
-
-  if srcNode == destNode:
-    paths.append(currPath[:-1] + [destNode])
-  elif destNode in srcZone.memberNodes:
-    paths.append(currPath[:-1] + srcZone.optimalRoutes[(srcNode, destNode)] )
-  else:
-    for borderNode in srcZone.borderNodes:
-     # print nodeToZoneDict[borderNode]
-     # print visitedZones
-      for neighbour in nodeToZoneDict[borderNode]:
-        if borderNode not in currPath and borderNode != srcNode and neighbour not in visitedZones and neighbour != srcZone:
-          getInterZonePaths (
-            visitedZones+[neighbour], 
-            borderNode, 
-            destNode, 
-            neighbour, 
-            nodeToZoneDict, 
-            paths, 
-            currPath[:-1]+srcZone.optimalRoutes[(srcNode,borderNode)], 
-          )
-  # need to shorten run time by cutting down on recursion depth. Something is far too unbounded here
-
-
 """ Setup and benchmarking """
 def main():
   complianceFactor, config, gui, csvFile = parseArgs()
-  configPaths = SumoConfigWrapper(config)
+  configPaths = SumoConfigWrapper(config, gui)
 
   sumoGui = ["/usr/local/bin/sumo-gui", "-c", config]
   sumoCmd = ["/usr/local/bin/sumo", "-c", config]
