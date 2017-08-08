@@ -353,7 +353,6 @@ def routeVehicle(vehId, edgeCostStore, network, edgeStore, edges, currEdge, dest
     shortestZonePath(set(), srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgeStore, edgeCostStore, network, vehicleRoutingLock)
     newRoute = edgeListConvert(scoreTable["bestPath"], edgeStore)
     newRoutesDict[vehId] = [currEdge]+newRoute
-  print vehId
 
 def getPathCost(vertexList, edgesStore, weights):
   return sum(weights[e] for e in edgeListConvert(vertexList, edgesStore))

@@ -36,9 +36,23 @@ Zones, Traffic Assignment, Congestion Reduction, Scalibility
 % outline from meeting has section breakdown:
 \section{Introduction}
 
+Intelligent Transportation Systems (ITS) aim to improve urban transit and travel experiences with the use of modern technology. This research area contributes to the development of smart cities. One criterion for the success of a smart city is the optimization of traffic flow. Traffic assignment optimization is an emerging subarea of ITS. Recent work in traffic assignment optimization literature aims to positively influence driver behavior without requiring any individual drivers to embark on less optimal routes. In this manner, a balance is struck between driver selfishness and system optimum. \\
+
+Traffic assignment optimization is a research area with significant social and ecological impact if left uninvestigated. The optimization of traffic routing in urban centers is crucial to addressing grand-scale socioecological issues such as climate change. In a natural system, drivers exhibit selfish behavior when traveling in urban centers. This creates significant congestion in key areas, such as a city's downtown core. Such congestion leads to runaway emissions of carbon-based pollutants, and imposes significant impact onto day-to-day productivity. \\
+
+The goal of this paper is to investigate strategies for scaling existing traffic assignment systems to very large datasets. This includes both artificial and real-world traffic scenarios. This paper aims to apply existing congestion reduction strategies against large, realistic inputs. In this work, cities are treated as discrete-time, multi-agent systems with no central control. This paper examines a specific strategy for the scalability of traffic assignment optimization. This strategy is one based on partial centralization. We propose that traffic networks be partitioned into zones, where the path between all pairs of intersections within one zone is stored in advance and evaluated at the zone-level. This reduces the time taken for individual vehicles to evaluate an optimal path. This zone-based approach is implemented in an algorithm dubbed Z-BAR, which is examined in detail later in this work. \\
+
+An ACO-based traffic assignment algorithm inspired by [*] is implemented in this work, and used as a template for illustrating the scalability Z-BAR provides. Since Z-BAR's purpose is scalability as opposed to traffic assignment itself, any decentralized traffic assignment model will be compatible with Z-BAR. With scaling provided by Z-BAR, the traffic assignment algorithm is executed against mutliple artificial and real-world scenarios of increasing network and population size. To the knowledge of the authors, this is the first work which specifically addresses scalability of traffic assignment optimization algorithms, and does so using the concept of zones. \\
+
+The remainder of the paper is organized as follows: Section 2 provides an overview of relevant work; Section 2 describes the paper's algorithm Z-BAR; Section 4 describes the simulation and experimental environment; Section 5 provides the experimental results against select large datasets. Finally, Section 6 presents the conclusions of this paper, accompanied by a discussion of future work.
+
+% objective: traffic reduction scaled %
+
 \section{Related Work} % existing lit and particularly IACO - and its issues. Also need HOPNET for foundation
 
 \section{Z-BAR} % how we will tackle the issues, give the algorithm
+
+\section{Simulation}
 
 \section{Experimental Results} % exec over large scale data
 
