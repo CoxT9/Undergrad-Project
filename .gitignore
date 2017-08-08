@@ -9,3 +9,6 @@ Project_Workspace/Basic_ACO/Logs.out.xml
 ACO_Sampling/ACOModel.py
 *.netccfg
 *.osm
+*.pdf
+*.aux
+*.log
