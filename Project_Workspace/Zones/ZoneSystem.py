@@ -5,27 +5,34 @@ the path between every pair of nodes within one zone is cached proactively (upda
 the path between multiple zones is evaluated on-demand (reactively).
 
 Ongoing challenges:
-- Robust node-zone assignment algorithm
+- Slow performance in large scale data
 """
-# Still to do:
-# Run experiments, bigger datasets
 
 import copy
 import datetime
+import itertools
 import os
 import random
 import sys
 import time
 
 from threading import Thread
+from threading import Lock
 
 sys.path.append(os.path.join(os.environ["SUMO_HOME"], "tools"))
 
 import sumolib
 import traci
 
-NEIGHBOUR_LIM = 3 # A zone is constructed with n hops from center node 
-MEMBERSHIP_LIM = 4 # A node may only be a member of up to m zones
+NEIGHBOUR_LIM = 15 # A zone is constructed with n hops from center node 
+# Known effective sizes for n:
+# with 282 edges in graph: 3
+# with 1476 edges in graph: 15
+# with 42194 edges in graph: _ 422??? Lower partitioning increases speed. Need to optimize
+
+# It is beginning to look like n should be 1% of the total edges in the graph
+# still need to run full executions to ensure travel time is still reduced
+# interzone routing has to be sped up. Will async improve perf?
 
 class Zone(object):
   def __init__(self, zid, center, network, memberNodes=None, borderNodes=None):
@@ -42,10 +49,7 @@ class Zone(object):
     else:
       self.memberNodes = list(memberNodes)
       self.borderNodes = list(borderNodes)
-
-    self.connectedZones = {} # Which zones _self_ connects to, and which nodes connect _self_ with other zones
-
-    self.optimalRoutes = self.setupRoutePairs(self.memberNodes)
+    self.optimalRoutes = {}
     self.zid = "z"+str(zid)
 
   def buildZone(self, center):
@@ -58,22 +62,22 @@ class Zone(object):
     return list(nodes), list(borderNodes)
 
   def updateRoutePairs(self, weights):
-    # Update pairs table on traffic change
-    newOptimalRoutes = {}
+    threads = []
+    for pair in itertools.permutations(self.memberNodes, 2):
+      threads.append(Thread(
+        target=self.setPair,
+        args=(
+          pair[0],
+          pair[1],
+          self.optimalRoutes,
+          weights
+          )
+        )
+      )
+    runThreads(threads)
 
-    for src, dest in self.optimalRoutes:
-      newOptimalRoutes[(src, dest)] = dijkstra(src, dest, self.network, weights)
-
-    self.optimalRoutes = newOptimalRoutes
-
-  def setupRoutePairs(self, nodes):
-    # route pairs init with dijkstra
-    routes = {}
-    for index, node1 in enumerate(nodes):
-      for node2 in nodes[:index]+nodes[index+1:]:
-        routes[(node1, node2)] = dijkstra(node1, node2, self.network)
-
-    return routes
+  def setPair(self, src, dest, routes, weights=None):
+    routes[(src, dest)] = dijkstra(src, dest, self.network, weights)
 
   def __contains__(self, nodeId):
     return nodeId in self.memberNodes
@@ -117,7 +121,7 @@ def nonePresent(subList, largerList):
 
 def parseArgs():
   if len(sys.argv) != 6:
-    print "Usage: %s <ComplianceFactor> <ConfigFile> <0/1> <CsvFile> <0/1>" % sys.argv[0]
+    log("Usage: %s <ComplianceFactor> <ConfigFile> <0/1> <CsvFile> <0/1>" % sys.argv[0])
     exit(0)
 
   complianceFactor = float(sys.argv[1])
@@ -220,36 +224,25 @@ def assignNodesToZones(network, nodes, verbose):
   log("Setting up Node-Zone assignment...", verbose)
   zoneStore = []
   nodeToZones = {value:[] for value in nodes}
+  nodeAssigned = {value:False for value in nodes}
   nodeZoneMembership = {value:0 for value in nodes}
-
-  done = False
   i = 0
+  for node in nodes:
+    if not nodeAssigned[node]:
 
-  while not done:
-    for node in nodeZoneMembership.keys():
-      if nodeZoneMembership[node] == 0:
-        candidateNodes = set()
-        candidateBorders = set()
-        collectNodes(candidateNodes, candidateBorders, network.getNode(node))
+      candidateNodes = set()
+      candidateBorders = set()
 
-        if MEMBERSHIP_LIM not in [nodeZoneMembership[cand] for cand in candidateNodes]: # this zone will not break the limit
-          newZone = Zone(i, node, network, candidateNodes, candidateBorders)
-          i += 1
-          removals = []
-          for existingZone in zoneStore:
-            # If our new zone is a superset of some zone z, we remove z.
-            if set(newZone.memberNodes).issuperset(existingZone.memberNodes):
-              removals.append(existingZone)
+      collectNodes(candidateNodes, candidateBorders, network.getNode(node))
+      newZone = Zone(i, node, network, candidateNodes, candidateBorders)
 
-          removeAll(zoneStore, removals)
+      i += 1
+      zoneStore.append(newZone)
 
-          zoneStore.append(newZone)
-          for member in newZone.memberNodes:
-            nodeZoneMembership[member] += 1
-            # Each node belongs to a list of zones
-            nodeToZones[member].append(newZone)
-
-    done = 0 not in nodeZoneMembership.values()
+      for member in newZone.memberNodes:
+        nodeAssigned[member] = True
+        nodeToZones[member].append(newZone)
+        nodeZoneMembership[member] += 1
 
   return zoneStore, nodeToZones
 
@@ -266,43 +259,50 @@ def runThreads(threads):
   for t in threads:
     t.join()
 
+def setVehicleColors(network, nodeToZoneDict, edgeOccupants):
+  fromNode = network.getEdge(edge).getFromNode().getID()
+  currZone = nodeToZoneDict[fromNode][0]
+  color = currZone.color
+  for agent in edgeOccupants:
+    traci.vehicle.setColor(agent, color)
+
 def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
-  print "Setting up execution..."
+  log("Setting up execution...", verbose)
   traci.start(sim)
   edges = getExplicitEdges()
+
   costStore = {value:0 for value in edges}
   traffic = {value:0 for value in edges}
-
   edgesStore = buildEdgesStore(network, edges)
 
   for step in xrange(int(config.endtime)):
     log("step: %s" % step, verbose)
+    zonesNeedingUpdate = set()
     for edge in edges:
+      originalCost = costStore[edge]
       edgeOccupants = traci.edge.getLastStepVehicleIDs(edge)
+      speedData = [traci.vehicle.getSpeed(v) for v in edgeOccupants]
       if config.gui:
-        fromNode = network.getEdge(edge).getFromNode().getID()
-        currZone = nodeToZoneDict[fromNode][0]
-        color = currZone.color
-        for agent in edgeOccupants:
-          traci.vehicle.setColor(agent, color)
+        setVehicleColors(network, nodeToZoneDict, edgeOccupants)
 
       # Update edge ph at each step
       edgelen = network.getEdge(edge).getLength()
       costStore[edge] = edgelen + traffic[edge]
-      traffic[edge] += 0.2 * (sum([1/(traci.vehicle.getSpeed(v)+0.01) for v in edgeOccupants]))
-
+      traffic[edge] += 0.2 * (sum([1/(entry+0.01) for entry in speedData]))
       traffic[edge] = max(0, traffic[edge]/(0.2 * (edgelen/network.getEdge(edge).getSpeed())) )
 
+      if originalCost != costStore[edge]:
+        zonesNeedingUpdate |= set(nodeToZoneDict[network.getEdge(edge).getToNode().getID()])
+        zonesNeedingUpdate |= set(nodeToZoneDict[network.getEdge(edge).getFromNode().getID()])
     # With up-to-date traffic levels, update intrazone tables
+    # may only want to update zones with changed nodes
+    # did we even need the paths in the first place?
     threads = []
     log("Setting intrazone routes with updated edge costs...", verbose)
-    for z in zoneStore:
+    for z in zonesNeedingUpdate:
       threads.append(Thread(
         target=updateRoutePairsConcurrentCaller,
-        args=(
-          z,
-          costStore,
-          )
+        args=(z, costStore)
         )
       )
     runThreads(threads)
@@ -315,7 +315,7 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
 
       currEdge = traci.vehicle.getRoadID(v)
       destNode = network.getEdge(traci.vehicle.getRoute(v)[-1]).getToNode().getID()
-
+      # is there a faster way to do this? likely lots of repitition
       threads.append(Thread(
         target=routeVehicle,
         args=(
@@ -323,6 +323,7 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
           costStore,
           network,
           edgesStore,
+          edges,
           currEdge,
           destNode,
           newRoutes,
@@ -331,7 +332,6 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
         )
       )
     runThreads(threads)
-
     for key in newRoutes:
       traci.vehicle.setRoute(key, newRoutes[key])
 
@@ -341,45 +341,49 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
       break
 
   traci.close(False)
-  print "Completed Execution."
+  log("Completed Execution.", verbose)
 
-def routeVehicle(vehId, edgeCostStore, network, edgeStore, currEdge, destNode, newRoutesDict, nodeToZoneDict):
-  if currEdge in edgeStore and network.getEdge(currEdge).getToNode.getID() != destNode:
+def routeVehicle(vehId, edgeCostStore, network, edgeStore, edges, currEdge, destNode, newRoutesDict, nodeToZoneDict):
+  if currEdge in edges and network.getEdge(currEdge).getToNode().getID() != destNode:
     scoreTable = {"bestPath":[], "bestCost":sys.maxint}
     currPath = []
     srcNode = network.getEdge(currEdge).getToNode().getID()
 
-    shortestZonePath([], srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgeStore, edgeCostStore, network)
-    newRoute = edgeListConvert(scoreTable["bestPath"])
+    vehicleRoutingLock = Lock()
+    shortestZonePath(set(), srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgeStore, edgeCostStore, network, vehicleRoutingLock)
+    newRoute = edgeListConvert(scoreTable["bestPath"], edgeStore)
     newRoutesDict[vehId] = [currEdge]+newRoute
+  print vehId
 
 def getPathCost(vertexList, edgesStore, weights):
   return sum(weights[e] for e in edgeListConvert(vertexList, edgesStore))
 
 # This is hacky. Unnecessary pointer voodoo
-def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgesStore, weights, network):
+def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgesStore, weights, network, currentVehicleRoutingLock):
   pathToDest = []
   if srcNode == destNode:
     pathToDest = [destNode]
   else:
-    srcZones = nodeToZoneDict[srcNode]
+    srcZones = list(set(nodeToZoneDict[srcNode]).difference(visitedZones))
     for z in srcZones:
       if destNode in z.memberNodes:
         pathToDest = z.optimalRoutes[(srcNode, destNode)]
 
-  if len(pathToDest) > 0 and nonePresent(pathToDest[1:], currPath): # append and return
-    bestCost = scoreTable["bestCost"]
-    bestPath = scoreTable["bestPath"]
-    candidatePath = currPath[:-1] + pathToDest
-    candidateCost = getPathCost(candidatePath, edgesStore, weights)
-    if candidateCost < bestCost:
-      scoreTable["bestPath"] = candidatePath
-      scoreTable["bestCost"] = candidateCost
+  if len(pathToDest) > 0 and nonePresent(pathToDest[1:], currPath):
+    with currentVehicleRoutingLock: # Lock only on the single-vehicle level.
+      bestCost = scoreTable["bestCost"]
+      bestPath = scoreTable["bestPath"]
+      candidatePath = currPath[:-1] + pathToDest
+      candidateCost = getPathCost(candidatePath, edgesStore, weights)
+      if candidateCost < bestCost:
+        scoreTable["bestPath"] = candidatePath
+        scoreTable["bestCost"] = candidateCost
     return # we found a route. no need to expand to more zones
 
   # effecetively an else case
-
-  visitedZones.extend(nodeToZoneDict[srcNode])
+  # perhaps a more distributed/async model?
+  visitedZones |= set(nodeToZoneDict[srcNode])
+  threads = []
   # now expand to multi zone. If the dest node was not in our zone, send the request to each neighbour
   for srcZone in nodeToZoneDict[srcNode]:
 
@@ -393,19 +397,28 @@ def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable
         newPath = currPath[:-1] + pathToBorder
 
         # mark each neighbour as visited and try them
+        # too many nodes are being checked. need to prune visited correctly
+        # spawn a thread?
         zonesToVisit = list(set(nodeToZoneDict[border]).difference(visitedZones))
         if len(zonesToVisit) > 0:
-          shortestZonePath (
-            visitedZones + zonesToVisit,
-            border,
-            destNode,
-            nodeToZoneDict,
-            scoreTable,
-            newPath,
-            edgesStore,
-            weights,
-            network
+          threads.append(Thread(
+            target=shortestZonePath,
+            args=(
+              visitedZones,
+              border,
+              destNode,
+              nodeToZoneDict,
+              scoreTable,
+              newPath,
+              edgesStore,
+              weights,
+              network,
+              currentVehicleRoutingLock
+              )
+            )
           )
+  runThreads(threads)
+
 
 """ Setup and benchmarking """
 def main():
@@ -422,9 +435,11 @@ def main():
   exc = sumoGui if gui else sumoCmd
   launchSim(zoneStore, nodeToZones, network, exc, configPaths, verbose)
 
+  # also need csv output
+  # route timings and total exec timings, size of graph and population too
+
 if __name__ == "__main__":
   starttime = time.time()
   main()
   time.sleep(1)
-  print "\n\n\n" # Buffer lines because SUMO also dumps to stdout
-  print "Execution completed in %f seconds." % (time.time() - starttime)
+  log("\n\n\nExecution completed in %f seconds." % (time.time() - starttime))
