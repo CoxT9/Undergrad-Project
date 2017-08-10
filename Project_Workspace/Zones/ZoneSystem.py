@@ -76,7 +76,7 @@ class Zone(object):
       )
     runThreads(threads)
 
-  def setPair(self, src, dest, routes, weights=None):
+  def setPair(self, src, dest, routes, weights):
     routes[(src, dest)] = dijkstra(src, dest, self.network, weights)
 
   def __contains__(self, nodeId):
@@ -150,12 +150,7 @@ def collectNodes(collection, borderNodes, centerNode, stackdepth=0):
       collectNodes(collection, borderNodes, n, stackdepth+1)
 
 """ Some old fashioned Dijkstra. Find the shortest path from @srcEdge to @destEdge on @network using @weights """
-def dijkstra(src, dest, network, weights=None):
-  if weights == None:
-    weights = {}
-    for e in network.getEdges():
-      weights[e.getID()] = e.getLength()
-
+def dijkstra(src, dest, network, weights):
   if src == dest:
     return [dest]
 
@@ -191,8 +186,6 @@ def dijkstra(src, dest, network, weights=None):
 
 """ Dijkstra utility function """
 def unpackPath(candidates, dest):
-  if dest not in candidates:
-    return None
   goal = dest
   path = []
   while goal:
@@ -249,9 +242,6 @@ def assignNodesToZones(network, nodes, verbose):
 def getExplicitEdges():
   return [ edge for edge in traci.edge.getIDList() if edge[0] != ":"]
 
-def updateRoutePairsConcurrentCaller(zone, weights):
-  zone.updateRoutePairs(weights)
-
 def runThreads(threads):
   for t in threads:
     t.start()
@@ -301,12 +291,11 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
     log("Setting intrazone routes with updated edge costs...", verbose)
     for z in zonesNeedingUpdate:
       threads.append(Thread(
-        target=updateRoutePairsConcurrentCaller,
-        args=(z, costStore)
+        target=z.updateRoutePairs,
+        args=(costStore,)
         )
       )
     runThreads(threads)
-
     # Reroute vehicles given updated zones
     threads = []
     newRoutes = {}
