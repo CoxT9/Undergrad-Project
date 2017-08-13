@@ -67,7 +67,19 @@ Outside of traffic optimization, there is work done in the literature which cove
 
 In the literature, zone-based routing has been successful in a wide array of applications. It is anticipated that a zone-routing strategy will be successful in improving the scalibility of existing traffic assignment algorithms. Storing optimal (least congested) intrazone paths and evaluated interzone paths on demand is a more scalable alternative to evalauting whole-network paths on every vehicle traversal. To the knowledge of the author, the zone routing protocol has not been applied to the traffic assignment optimization problem.
 
-\section{Z-BAR} % how we will tackle the issues, give the algorithm
+\section{Z-BAR Algorithm} % how we will tackle the issues, give the algorithm
+
+The Z-BAR algorithm involves the partioning of a traffic network into multiple zones. Local routes within each zone are proactively maintained by a routing table, while vehicles evaluate their routes reactively when traversing across multiple zones. The network is divided into a number of zones proportional to the total number of roads in the network. A zone consists of all nodes within a radius r of a center node. This includes the edges between all member nodes. The radius of a node is determined by the number of hops required to reach the node from the center. The previous example shows a zone system with a radius of 2. If a node is exactly r hops away from its center, it is designated a border node. Border nodes are responsible for maintaining the paths between all of the zones in which they belong. The Z-BAR algorithm is divided into three components: zone formation, route maintenance and route discovery.
+
+\subsection{Zone Formation}
+
+\subsection{Route Maintenance}
+
+\subsection{Route Discovery}
+
+\subsection{Single-Zone Route Discovery}
+
+\subsection{Multi-Zone Route Discovery}
 
 % the approach and the algorithm. Effectively standard multi-zone routing. Intra: Storage. Inter: React. Dijkstra's for shortest path. Parallelism and async.
 \section{Simulation}

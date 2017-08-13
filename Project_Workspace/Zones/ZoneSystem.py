@@ -7,7 +7,7 @@ the path between multiple zones is evaluated on-demand (reactively).
 Ongoing challenges:
 - Slow performance in large scale data
 """
-
+# This needs to sped up for larger datasets
 import copy
 import datetime
 import itertools
@@ -24,7 +24,7 @@ sys.path.append(os.path.join(os.environ["SUMO_HOME"], "tools"))
 import sumolib
 import traci
 
-NEIGHBOUR_LIM = 15 # A zone is constructed with n hops from center node 
+NEIGHBOUR_LIM = 3 # A zone is constructed with n hops from center node 
 # Known effective sizes for n:
 # with 282 edges in graph: 3
 # with 1476 edges in graph: 15
