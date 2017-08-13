@@ -6,6 +6,7 @@
 
 \usepackage{algorithm}% http://ctan.org/pkg/algorithms
 \usepackage{algpseudocode}% http://ctan.org/pkg/algorithmicx
+\usepackage{algpseudocode}
 
 \usepackage{graphicx}
 \graphicspath{ {images/} }
@@ -45,7 +46,7 @@ Traffic assignment optimization is a research area with significant social and e
 
 The goal of this paper is to investigate strategies for scaling existing traffic assignment systems to very large datasets. This includes both artificial and real-world traffic scenarios. This paper aims to apply existing congestion reduction strategies against large, realistic inputs. In this work, cities are treated as discrete-time, multi-agent systems with no central control. This paper examines a specific strategy for the scalability of traffic assignment optimization. This strategy is one based on partial centralization. We propose that traffic networks be partitioned into zones, where the path between all pairs of intersections within one zone is stored in advance and evaluated at the zone-level. This reduces the time taken for individual vehicles to evaluate an optimal path. This zone-based approach is implemented in an algorithm dubbed Z-BAR, which is examined in detail later in this work.
 
-An ACO-based traffic assignment algorithm inspired by [*] is implemented in this work, and used as a template for illustrating the scalability Z-BAR provides. Since Z-BAR's purpose is scalability as opposed to traffic assignment itself, any decentralized traffic assignment model will be compatible with Z-BAR. With scaling provided by Z-BAR, the traffic assignment algorithm is executed against mutliple artificial and real-world scenarios of increasing network and population size. To the knowledge of the authors, this is the first work which specifically addresses scalability of traffic assignment optimization algorithms, and does so using the concept of zones.
+An ACO-based traffic assignment algorithm inspired by [*] is implemented in this work, and used as a template for illustrating the scalability Z-BAR provides. Since Z-BAR's purpose is scalability as opposed to traffic assignment itself, any decentralized traffic assignment model will be compatible with Z-BAR. With scaling provided by Z-BAR, the traffic assignment algorithm is executed against mutliple artificial and real-world scenarios of increasing network and population size. To the knowledge of the authors, this is the first work which specifically addresses the scalability of traffic assignment optimization algorithms, and does so using the concept of zones.
 
 The remainder of the paper is organized as follows: Section 2 provides an overview of relevant work; Section 2 describes the paper's algorithm Z-BAR; Section 4 describes the simulation and experimental environment; Section 5 provides the experimental results against select large datasets. Finally, Section 6 presents the conclusions of this paper, accompanied by a discussion of future work.
 
@@ -76,6 +77,15 @@ The Z-BAR algorithm involves the partioning of a traffic network into multiple z
 The first step of Z-BAR is the division of the road network into a multiple zones. Each zone consists of a center node and all nodes up to r hops away, including the edges connecting each node. Each zone is responsible for its own routing table, a data structure which stores the optimal path between each pair of vertices within the zone. Upon creating of the zone, the optimal path defaults to the result of Dijkstra's algorithm between the two nodes. The zone formation step of Z-BAR proceeds until each node belongs to at least one zone, and each zone's routing table has been initialized.
 
 % zone setup pseudocode 
+\begin{algorithm}[H]
+    \caption{Zone Formation}
+    \label{zone_formation}
+    \begin{algorithmic}[1] % The number tells where the line numbering should start
+    \Procedure{Formation}{}
+
+    \EndProcedure
+    \end{algorithmic}
+\end{algorithm}
 
 \subsection{Route Maintenance}
 
