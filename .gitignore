@@ -13,3 +13,4 @@ ACO_Sampling/ACOModel.py
 *.aux
 *.log
 Project_Workspace/Zones/paper/images/*
+*.gz

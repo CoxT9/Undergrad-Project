@@ -74,20 +74,54 @@ The Z-BAR algorithm involves the partioning of a traffic network into multiple z
 
 \subsection{Zone Formation}
 
-The first step of Z-BAR is the division of the road network into a multiple zones. Each zone consists of a center node and all nodes up to r hops away, including the edges connecting each node. Each zone is responsible for its own routing table, a data structure which stores the optimal path between each pair of vertices within the zone. Upon creating of the zone, the optimal path defaults to the result of Dijkstra's algorithm between the two nodes. The zone formation step of Z-BAR proceeds until each node belongs to at least one zone, and each zone's routing table has been initialized.
+The first step of Z-BAR is the division of the road network into multiple zones. Each zone consists of a center node and all nodes up to r hops away, including the edges connecting each node. Each zone is responsible for its own routing table, a data structure which stores the optimal path between each pair of vertices within the zone. Upon creation of the zone, routing tables are initialized but are not yet populated. Routing tables are populated in the route-maintenance step. The zone formation step of Z-BAR proceeds until each node belongs to at least one zone.
 
 % zone setup pseudocode 
 \begin{algorithm}[H]
-    \caption{Zone Formation}
-    \label{zone_formation}
-    \begin{algorithmic}[1] % The number tells where the line numbering should start
-    \Procedure{Formation}{}
-
-    \EndProcedure
-    \end{algorithmic}
+  \caption{Zone Formation}
+  \label{zone_formation}
+  \begin{algorithmic}[1] % The number tells where the line numbering should start
+  \Procedure{Formation}{$G$}
+  \State{$Zones \gets [\ ]$}
+  \For{$v \in G$}
+    \If{$v\ unassigned$}
+      \State{$center \gets v$}
+      \State{$Z \gets newZone(radius, center, G)$}
+      \State{$Zones.append(Z)$}
+    \EndIf
+  \EndFor
+  \State{$return\ Zones$}
+  \EndProcedure
+  \end{algorithmic}
 \end{algorithm}
 
+% Consider digging into newZone (ie specific zone construction) and complexity analysis of this procedure. Basically V * BFS
+
+The above procedure executes for each node in the network, corresponding to vertices in a graph G. Nodes not yet part of any zone are designated the center of the next zone, which is formed by a breadth-first search starting at the center node and extending to r hops. The procedure will exit once all nodes belong to at least one zone. This guarantees full coverage of the network into multiple, possibly overlapping zones. The procedure then returns the collection of zones which cover G.
+
 \subsection{Route Maintenance}
+
+% Be careful about whether we want centralized, decentralized, or both
+% This section needs clarification
+
+Once the network has been divided into zones, the routing table of each zone must be established and periodically maintained. Note that each zone's routing table is initialized to an empty table on setup. Routing tables are responsible for storing the optimal path between every pair of nodes within a single zone. This process begins once Z-BAR itself moves from setup to launch. On a designated time interval, each zone updates its routing table based on the latest traffic data. This data is gathered by a peer-to-peer system such as a Vehicular Ad-Hoc Network (VANET). Dividing the graph into zones elimintates the need for a central routing authority. Intrazone paths are adjusted based on the cost of each edge in terms of travel time. Frequent updates of routing tables allow zones to capture the pseudostatic nature of traffic networks: the network topology is constant while the weight of each edge is subject to change.
+
+% Zone-Based FW %
+\begin{algorithm}[H]
+  \caption{Route Maintenance}
+  \label{route_maintenance}
+  \begin{algorithmic}[1]
+  \Procedure{Zone::UpdateRoutingTable}{$Weights$}
+  \State{$paths \gets optimalPaths(nodes,\ edges,\ Weights)$}
+  \For{$v1,v2 \in nodes$}
+    \State{$routingTable[v1,\ v2] \gets paths[v1,\ v2]$}
+  \EndFor
+  \EndProcedure
+  \end{algorithmic}
+\end{algorithm}
+
+% Explain pseudocode
+% Discuss about FW, time interval considerations, concurrency
 
 \subsection{Route Discovery}
 

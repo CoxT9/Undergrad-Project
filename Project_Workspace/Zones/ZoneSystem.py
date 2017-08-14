@@ -7,7 +7,7 @@ the path between multiple zones is evaluated on-demand (reactively).
 Ongoing challenges:
 - Slow performance in large scale data
 """
-# This needs to sped up for larger datasets
+
 import copy
 import datetime
 import itertools
@@ -31,9 +31,9 @@ NEIGHBOUR_LIM = 3 # A zone is constructed with n hops from center node
 # with 1476 edges in graph: 15
 # with 42194 edges in graph: _ 422??? Lower partitioning increases speed. Need to optimize
 
-# It is beginning to look like n should be 1% of the total edges in the graph
-# still need to run full executions to ensure travel time is still reduced
-# interzone routing has to be sped up. Will async improve perf?
+# Tradeoff:
+# Bigger zones = slower maintenance, faster discovery
+# Smaller zones: faster maintenance, slower discovery
 
 class Zone(object):
   def __init__(self, zid, center, network, memberNodes=None, borderNodes=None):
@@ -62,18 +62,29 @@ class Zone(object):
     collectNodes(nodes, borderNodes, centerNode, i)
     return list(nodes), list(borderNodes)
 
-  def updateRoutePairs(self, weights, edges=None):
-    # Floyd Warshshall for assigning the path between every pair
-    # FW is a |V| cubed alg for finding path between all pairs in a graph
-    # Should think about running this one in a single thread, for simulation purposes
-    nodes = self.network.getNodes()
+  """ Route Maintenance Step """
+  def updateRoutePairs(self, weights, globalEdges):
+    nodes = self.memberNodes
+    edges = {}
+    for e in globalEdges:
+      if e[0] in nodes and e[1] in nodes:
+        edges[e] = globalEdges[e]
+
+    paths = self.zoneFloydWarshall(nodes, edges, weights)
+
+    for pair in itertools.permutations(self.memberNodes, 2):
+      path = self.unpackFWPath(pair, paths)
+      self.optimalRoutes[(pair[0], pair[1])] = path
+
+  """ Single Zone Floyd Warshall """
+  def zoneFloydWarshall(self, nodes, edges, weights):
     dists = {}
     nexts = {}
     for n in nodes:
       for n2 in nodes:
-        dists[(n.getID(), n2.getID())] = sys.maxint 
-        nexts[(n.getID(), n2.getID())] = None
-      dists[(n.getID(), n.getID())] = 0   
+        dists[(n, n2)] = sys.maxint 
+        nexts[(n, n2)] = None
+      dists[(n, n)] = 0
 
     for edge in edges:
       dists[(edge[0], edge[1])] = weights[edges[edge]]
@@ -83,13 +94,11 @@ class Zone(object):
       for j in range(len(nodes)):
         for k in range(len(nodes)):
 
-          if dists[(nodes[j].getID(), nodes[k].getID())] > dists[(nodes[j].getID(), nodes[i].getID())] + dists[(nodes[i].getID(), nodes[k].getID())]:
-            dists[(nodes[j].getID(), nodes[k].getID())] = dists[(nodes[j].getID(), nodes[i].getID())] + dists[(nodes[i].getID(), nodes[k].getID())]
-            nexts[(nodes[j].getID(), nodes[k].getID())] = nexts[(nodes[j].getID(), nodes[i].getID())]
+          if dists[(nodes[j], nodes[k])] > dists[(nodes[j], nodes[i])] + dists[(nodes[i], nodes[k])]:
+            dists[(nodes[j], nodes[k])] = dists[(nodes[j], nodes[i])] + dists[(nodes[i], nodes[k])]
+            nexts[(nodes[j], nodes[k])] = nexts[(nodes[j], nodes[i])]
 
-    for pair in itertools.permutations(self.memberNodes, 2):
-      path = self.unpackFWPath(pair, nexts)
-      self.optimalRoutes[(pair[0], pair[1])] = path
+    return nexts
 
   """ Floyd Warshasll Utility. Take tuple @pair and array @nexts and turn into list of vertices """
   def unpackFWPath(self, pair, nexts):
@@ -323,7 +332,6 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
         )
       )
     runThreads(threads)
-
   # Reroute vehicles given updated zones
     threads = []
     newRoutes = {}
@@ -375,6 +383,7 @@ def getPathCost(vertexList, edgesStore, weights):
   return sum(weights[e] for e in edgeListConvert(vertexList, edgesStore))
 
 # This is hacky. Unnecessary pointer voodoo
+# This is the bottleneck now
 def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgesStore, weights, network, currentVehicleRoutingLock):
   pathToDest = []
   if srcNode == destNode:
