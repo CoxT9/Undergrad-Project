@@ -24,6 +24,7 @@ sys.path.append(os.path.join(os.environ["SUMO_HOME"], "tools"))
 import sumolib
 import traci
 
+# need to keep this value down
 NEIGHBOUR_LIM = 3 # A zone is constructed with n hops from center node 
 # Known effective sizes for n:
 # with 282 edges in graph: 3
@@ -61,20 +62,46 @@ class Zone(object):
     collectNodes(nodes, borderNodes, centerNode, i)
     return list(nodes), list(borderNodes)
 
-  def updateRoutePairs(self, weights):
-    threads = []
+  def updateRoutePairs(self, weights, edges=None):
+    # Floyd Warshshall for assigning the path between every pair
+    # FW is a |V| cubed alg for finding path between all pairs in a graph
+    # Should think about running this one in a single thread, for simulation purposes
+    nodes = self.network.getNodes()
+    dists = {}
+    nexts = {}
+    for n in nodes:
+      for n2 in nodes:
+        dists[(n.getID(), n2.getID())] = sys.maxint 
+        nexts[(n.getID(), n2.getID())] = None
+      dists[(n.getID(), n.getID())] = 0   
+
+    for edge in edges:
+      dists[(edge[0], edge[1])] = weights[edges[edge]]
+      nexts[(edge[0], edge[1])] = edge[1]
+
+    for i in range(len(nodes)):
+      for j in range(len(nodes)):
+        for k in range(len(nodes)):
+
+          if dists[(nodes[j].getID(), nodes[k].getID())] > dists[(nodes[j].getID(), nodes[i].getID())] + dists[(nodes[i].getID(), nodes[k].getID())]:
+            dists[(nodes[j].getID(), nodes[k].getID())] = dists[(nodes[j].getID(), nodes[i].getID())] + dists[(nodes[i].getID(), nodes[k].getID())]
+            nexts[(nodes[j].getID(), nodes[k].getID())] = nexts[(nodes[j].getID(), nodes[i].getID())]
+
     for pair in itertools.permutations(self.memberNodes, 2):
-      threads.append(Thread(
-        target=self.setPair,
-        args=(
-          pair[0],
-          pair[1],
-          self.optimalRoutes,
-          weights
-          )
-        )
-      )
-    runThreads(threads)
+      path = self.unpackFWPath(pair, nexts)
+      self.optimalRoutes[(pair[0], pair[1])] = path
+
+  """ Floyd Warshasll Utility. Take tuple @pair and array @nexts and turn into list of vertices """
+  def unpackFWPath(self, pair, nexts):
+    if nexts[(pair[0], pair[1])] == None:
+      return []
+
+    curr = pair[0]
+    path = [curr]
+    while curr != pair[1]:
+      curr = nexts[(curr, pair[1])]
+      path.append(curr)
+    return path
 
   def setPair(self, src, dest, routes, weights):
     routes[(src, dest)] = dijkstra(src, dest, self.network, weights)
@@ -87,7 +114,6 @@ class Zone(object):
 
   def __repr__(self):
     return self.zid
-
 
 class SumoConfigWrapper(object):
   def __init__(self, configfile, guiOn):
@@ -284,19 +310,21 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
       if originalCost != costStore[edge]:
         zonesNeedingUpdate |= set(nodeToZoneDict[network.getEdge(edge).getToNode().getID()])
         zonesNeedingUpdate |= set(nodeToZoneDict[network.getEdge(edge).getFromNode().getID()])
-    # With up-to-date traffic levels, update intrazone tables
-    # may only want to update zones with changed nodes
-    # did we even need the paths in the first place?
+
+    # Instead of Dijkstras against each pair, run Floyd Warshall once and make requests against it
+    # This would obviously be replicated in a distributed environment 
+    #(ie: each zone executes FW to find its own pairs)
     threads = []
     log("Setting intrazone routes with updated edge costs...", verbose)
-    for z in zonesNeedingUpdate:
+    for z in list(zonesNeedingUpdate):
       threads.append(Thread(
         target=z.updateRoutePairs,
-        args=(costStore,)
+        args=(costStore,edgesStore)
         )
       )
     runThreads(threads)
-    # Reroute vehicles given updated zones
+
+  # Reroute vehicles given updated zones
     threads = []
     newRoutes = {}
     log("Assigning routes to vehicles...", verbose)
