@@ -20,6 +20,9 @@
 % A novel algorithm for scalable traffic congestion reduction
 % An adaptible model for scalability in traffic assignment algorithms
 
+% remember to call out multi-path options (MZD)
+% remember to call out zone changes and dynamacity (Future Work)
+
 \author{\IEEEauthorblockN{Taylor Cox}
 \IEEEauthorblockA{Department of Computer Science\\
 University of Manitoba\\
@@ -122,7 +125,7 @@ The above procedure is meant to be executed upon each zone on a regular schedule
 
 \subsection{Route Discovery}
 
-In Z-BAR, vehicles regularly make queries to their current zone regarding the optimal path to their destination. This allows for high responsiveness to any changes in traffic conditions. When discovering a route, vehicles begin their search at the most immediate upcoming node. Suppose a vehicle \textit{v} is present on an edge \textit{e} at time \textit{t}. \textit{V} will begin its search at the source node \textit{s}, where \textit{s} is the node \textit{e} leads to. This prevents vehicles from constructing paths with nodes which they have already passed. Route discovery is the process vehicles engage in when searching for an updated route assignment. This is divided into two aspects: single-zone and multi-zone. Single-zone route discovery occurs when a vehicle's source and destination reside in one zone. Multi-zone discovery occurs when a vehicle's source and destination reside in separate zones, requiring the concatenation of multiple single-zone paths. 
+In Z-BAR, vehicles regularly make queries to their current zone regarding the optimal path to their destination. This allows for high responsiveness to any changes in traffic conditions. When discovering a route, vehicles begin their search at the most immediate upcoming node. Suppose a vehicle \textit{v} is present on an edge \textit{e} at time \textit{t}. \textit{V} will begin its search at the source node \textit{s}, where \textit{s} is the node \textit{e} leads to. This prevents vehicles from constructing paths with nodes which they have already passed. Route discovery is the process vehicles engage in when searching for an updated route assignment. This is divided into two aspects: single-zone and multi-zone. Single-zone route discovery occurs when a vehicle's source and destination reside in one zone. Multi-zone discovery occurs when a vehicle's source and destination reside in separate zones, requiring the concatenation of multiple single-zone paths. The route discovery phase is to be executed independently by each vehicle in the system via on-board units (OBU) [*].
 
 \subsubsection{Single-Zone Route Discovery}
 
@@ -137,21 +140,22 @@ Single-Zone route discovery is the core aspect of route discovery in Z-BAR. This
   \State{$src \gets Vehicle.nextNode$}
   \State{$dest \gets Vehicle.destination$}
   \State{$exit\ unless\ src \neq dest$}
-  \State{$zones \gets AllZones.reduce(z: src \in z \wedge dest \in z)$}
+  \State{$zones \gets AllZones.filter(z: src \in z \wedge dest \in z)$}
   \State{$paths \gets zones.map(z: z.table[src,dest])$}
-  \State{$Vehicle.route \gets min(paths)$}
+  \State{$Vehicle.route \gets min(min(paths), Vehicle.route)$}
   \EndProcedure
   \end{algorithmic}
 \end{algorithm}
 
 % Give a quick description.
-In order for single-zone discovery to be successful, two assumptions are required. First, the vehicle's source and destination nodes must be distinct. Second, the two nodes must be present in the same zone. If the vehicle's source \textit{is} its destination, no work is required and the procedure exits. Otherwise, all zones containing both the source and destination nodes are gathered and mapped to their corresponding \textit{src, dest} table entries. The minimum of these routes is assigned to the vehicle. If no nodes containing the source zone also contain the destination zone, Z-BAR moves on to the multi-zone discovery phase.
+In order for single-zone discovery to be successful, two assumptions are required. First, the vehicle's source and destination nodes must be distinct. Second, the two nodes must be present in the same zone. If the vehicle's source \textit{is} its destination, no work is required and the procedure exits. Otherwise, all zones containing both the source and destination nodes are gathered and mapped to their corresponding \textit{src, dest} table entries. The minimum of these routes is assigned to the vehicle if it has a lower cost than the vehicle's existing route. The cost of a route corresponds to the traffic density model used. If no nodes containing the source zone also contain the destination zone, Z-BAR moves on to the multi-zone discovery phase.
 
 \subsubsection{Multi-Zone Route Discovery}
 
-A vehicle only engages in multi-zone route discovery when no zones which include its source also include its destination.
-
-% Write up multizone discovery. Use this as a chance to tweak and improve the alg itself
+% Very first draft:
+% This will need some editing in tandem with writing out the procedure
+% Big question, is it the vehicles or the zones that do the searching. Likely the zones - vehicles do not have topology awareness
+A vehicle only engages in multi-zone route discovery when no zones which include its source also include its destination. Beginning at the border nodes of the source zone, vehicles request a depth-first search to discover the optimal path to their destination. Multi-zone route discovery requires multiple single-zone paths to be concatenated and assigned to the vehicle as its new route. The path from the vehicle's source node to each border node is stored for concatenation with the corresponding neighbouring zones. This process continues until one of the border nodes has a path to the destination node. Once the destination node is found, the discovery algorithm terminates with an execution of the single-zone route discovery procedure. The optimal multi-zone path is assigned to the vehicle if and only if it has a lower cost than the vehicle's current route.
 
 % pseudocode for multi zone discovery
 \begin{algorithm}[H]

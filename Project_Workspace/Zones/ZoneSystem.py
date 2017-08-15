@@ -6,6 +6,7 @@ the path between multiple zones is evaluated on-demand (reactively).
 
 Ongoing challenges:
 - Slow performance in large scale data
+- No complete experimental output yet produced
 """
 
 import copy
@@ -25,11 +26,9 @@ import sumolib
 import traci
 
 # need to keep this value down
-NEIGHBOUR_LIM = 3 # A zone is constructed with n hops from center node 
-# Known effective sizes for n:
-# with 282 edges in graph: 3
-# with 1476 edges in graph: 15
-# with 42194 edges in graph: _ 422??? Lower partitioning increases speed. Need to optimize
+NEIGHBOUR_LIM = 10 # A zone is constructed with n hops from center node 
+# 0.5% seems to be an effective number thus far
+
 
 # Tradeoff:
 # Bigger zones = slower maintenance, faster discovery
@@ -303,6 +302,8 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
   for step in xrange(int(config.endtime)):
     log("step: %s" % step, verbose)
     zonesNeedingUpdate = set()
+
+    # This is our edge-cost system. Inspired by DTPOS and IACO. Used as an example for the zone algorithm
     for edge in edges:
       originalCost = costStore[edge]
       edgeOccupants = traci.edge.getLastStepVehicleIDs(edge)
@@ -352,11 +353,13 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
           currEdge,
           destNode,
           newRoutes,
+          sum(costStore[e] for e in traci.vehicle.getRoute(v)),
           nodeToZoneDict
           )
         )
       )
     runThreads(threads)
+
     for key in newRoutes:
       traci.vehicle.setRoute(key, newRoutes[key])
 
@@ -368,82 +371,67 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
   traci.close(False)
   log("Completed Execution.", verbose)
 
-def routeVehicle(vehId, edgeCostStore, network, edgeStore, edges, currEdge, destNode, newRoutesDict, nodeToZoneDict):
-  if currEdge in edges and network.getEdge(currEdge).getToNode().getID() != destNode:
-    scoreTable = {"bestPath":[], "bestCost":sys.maxint}
-    currPath = []
+def routeVehicle(vehId, edgeCostStore, network, edgeStore, edges, currEdge, destNode, newRoutesDict, currCost, nodeToZoneDict):
+  if currEdge in edges:
     srcNode = network.getEdge(currEdge).getToNode().getID()
+    if srcNode != destNode:
+      scoreTable = {"bestPath":[], "bestCost":currCost} # this needs to be vehicles existing route. Otherwise we end up with all kinds of insanity
+      currPath = []
+      srcNode = network.getEdge(currEdge).getToNode().getID()
 
-    vehicleRoutingLock = Lock()
-    shortestZonePath(set(), srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgeStore, edgeCostStore, network, vehicleRoutingLock)
-    newRoute = edgeListConvert(scoreTable["bestPath"], edgeStore)
-    newRoutesDict[vehId] = [currEdge]+newRoute
+      vehicleRoutingLock = Lock()
+      shortestZonePath(set(), srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgeStore, edgeCostStore, network, vehicleRoutingLock)
+      newRoute = edgeListConvert(scoreTable["bestPath"], edgeStore)
+      newRoutesDict[vehId] = [currEdge]+newRoute
 
 def getPathCost(vertexList, edgesStore, weights):
   return sum(weights[e] for e in edgeListConvert(vertexList, edgesStore))
 
-# This is hacky. Unnecessary pointer voodoo
-# This is the bottleneck now
+# Some pointer voodoo. Hold on tight!
 def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgesStore, weights, network, currentVehicleRoutingLock):
-  pathToDest = []
-  if srcNode == destNode:
-    pathToDest = [destNode]
-  else:
-    srcZones = list(set(nodeToZoneDict[srcNode]).difference(visitedZones))
-    for z in srcZones:
-      if destNode in z.memberNodes:
-        pathToDest = z.optimalRoutes[(srcNode, destNode)]
+  srcZones = nodeToZoneDict[srcNode]
+  possibleZones = filter(lambda z: destNode in z, srcZones)
 
-  if len(pathToDest) > 0 and nonePresent(pathToDest[1:], currPath):
-    with currentVehicleRoutingLock: # Lock only on the single-vehicle level.
+  if(len(possibleZones)) > 0: # Destination found in src's zone.
+    possibleRoutes = map(lambda z: z.optimalRoutes[(srcNode, destNode)], possibleZones)
+    currPathCost = getPathCost(currPath[:-1], edgesStore, weights)
+    pathToDest = currPath[:-1] + min(possibleRoutes, key=lambda k: getPathCost(k, edgesStore, weights) )
+    finalPathCost = getPathCost(pathToDest, edgesStore, weights)
+
+    with currentVehicleRoutingLock:
       bestCost = scoreTable["bestCost"]
-      bestPath = scoreTable["bestPath"]
-      candidatePath = currPath[:-1] + pathToDest
-      candidateCost = getPathCost(candidatePath, edgesStore, weights)
-      if candidateCost < bestCost:
-        scoreTable["bestPath"] = candidatePath
-        scoreTable["bestCost"] = candidateCost
-    return # we found a route. no need to expand to more zones
+      if finalPathCost < bestCost:
+        scoreTable["bestPath"] = pathToDest
+        scoreTable["bestCost"] = finalPathCost
 
-  # effecetively an else case
-  # perhaps a more distributed/async model?
-  visitedZones |= set(nodeToZoneDict[srcNode])
-  threads = []
-  # now expand to multi zone. If the dest node was not in our zone, send the request to each neighbour
-  for srcZone in nodeToZoneDict[srcNode]:
+  else: # Destination not found in src's zones.
+    # So all the src zones don't have the destination. Mark them visited.
+    visitedZones |= set(srcZones)
+    threads = []
 
-    for border in srcZone.borderNodes:
-      if border == srcNode:
-        pathToBorder = [border]
-      else:
-        pathToBorder = srcZone.optimalRoutes[(srcNode, border)]
+    # Let's see if any of our source zones' unvisited neighbours will get us a path:
+    for srcZone in srcZones:
+      # The borders will show us who the neighbours are
+      for border in srcZone.borderNodes:
+        if len(network.getNode(border).getOutgoing()) > 1 and set(nodeToZoneDict[border]).difference(visitedZones) != set():
+          pathToBorder = [border] if border == srcNode else srcZone.optimalRoutes[(srcNode, border)]
 
-      if len(network.getNode(border).getOutgoing()) > 1 and nonePresent(pathToBorder[1:], currPath): # We haven't looked at this path yet
-        newPath = currPath[:-1] + pathToBorder
+          if nonePresent(pathToBorder[1:], currPath):
+            # We haven't looked at this path yet
+            newPath = currPath[:-1] + pathToBorder
 
-        # mark each neighbour as visited and try them
-        # too many nodes are being checked. need to prune visited correctly
-        # spawn a thread?
-        zonesToVisit = list(set(nodeToZoneDict[border]).difference(visitedZones))
-        if len(zonesToVisit) > 0:
-          threads.append(Thread(
-            target=shortestZonePath,
-            args=(
-              visitedZones,
-              border,
-              destNode,
-              nodeToZoneDict,
-              scoreTable,
-              newPath,
-              edgesStore,
-              weights,
-              network,
-              currentVehicleRoutingLock
+            shortestZonePath(
+                visitedZones,
+                border,
+                destNode,
+                nodeToZoneDict,
+                scoreTable,
+                newPath,
+                edgesStore,
+                weights,
+                network,
+                currentVehicleRoutingLock
               )
-            )
-          )
-  runThreads(threads)
-
 
 """ Setup and benchmarking """
 def main():
