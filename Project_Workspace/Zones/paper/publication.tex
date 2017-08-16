@@ -129,52 +129,62 @@ In Z-BAR, vehicles regularly make queries to their current zone regarding the op
 
 \subsubsection{Single-Zone Route Discovery}
 
-Single-Zone route discovery is the core aspect of route discovery in Z-BAR. This is effectively the base-case of Z-BAR's route discovery approach. When a route discovery request is initiated, vehicles begin at their next upcoming node. Since each node in the system may belong to multiple zones, vehicles must evaluate each zone which their start node belongs to. Single zone route discovery occurs when the source node \textit{s} and the vehicle's destination \textit{d} belong to the same zone. In this case, the vehicle's route is reassigned to the value of the zone's routing table at \textit{s, d}.
+Single-Zone route discovery is the core aspect of route discovery in Z-BAR. Single zone route discovery occurs when the vehicle's source \textit{s} and the destination \textit{d} share a zone. This is effectively the base-case of Z-BAR's route discovery approach. When a routing request is initiated, vehicles begin at their next upcoming node. Since each node in the system may belong to multiple zones, each zone which covers the start node must be considered. In this case, the vehicle's route is compared to the value of the zone's routing table at \textit{s, d}, and reassigned if an improvement is found.
 
 % pseudocode for single zone discovery
 \begin{algorithm}[H]
   \caption{Single-Zone Discovery}
   \label{route_discovery_single_zone}
   \begin{algorithmic}[1]
-  \Procedure{SZDiscovery}{$Vehicle, G, AllZones$}
-  \State{$src \gets Vehicle.nextNode$}
-  \State{$dest \gets Vehicle.destination$}
-  \State{$exit\ unless\ src \neq dest$}
-  \State{$zones \gets AllZones.filter(z: src \in z \wedge dest \in z)$}
+  \Procedure{SZDiscovery}{$src, dest$}
+  \State{$assert\ src \neq dest$}
+  \State{$zones \gets AllZones(src).filter(z: dest \in z)$}
   \State{$paths \gets zones.map(z: z.table[src,dest])$}
-  \State{$Vehicle.route \gets min(min(paths), Vehicle.route)$}
+  \State{$return min(min(paths))$}
   \EndProcedure
   \end{algorithmic}
 \end{algorithm}
 
 % Give a quick description.
-In order for single-zone discovery to be successful, two assumptions are required. First, the vehicle's source and destination nodes must be distinct. Second, the two nodes must be present in the same zone. If the vehicle's source \textit{is} its destination, no work is required and the procedure exits. Otherwise, all zones containing both the source and destination nodes are gathered and mapped to their corresponding \textit{src, dest} table entries. The minimum of these routes is assigned to the vehicle if it has a lower cost than the vehicle's existing route. The cost of a route corresponds to the traffic density model used. If no nodes containing the source zone also contain the destination zone, Z-BAR moves on to the multi-zone discovery phase.
+Single-zone discovery assumes \textit{s} and \textit{d} are two distinct nodes in the same zone. If the vehicle's source \textit{is} its destination, no work is required and the procedure exits. Otherwise, all zones containing both the source and destination nodes are gathered and mapped to their corresponding \textit{src, dest} table entries. The minimum of these routes is assigned to the vehicle if it has a lower cost than the vehicle's existing route. The cost of a route corresponds to the traffic density model used. If no zones containing the source node also contain the destination node, Z-BAR defers to multi-zone discovery.
 
 \subsubsection{Multi-Zone Route Discovery}
 
-% Very first draft:
-% This will need some editing in tandem with writing out the procedure
-% Big question, is it the vehicles or the zones that do the searching. Likely the zones - vehicles do not have topology awareness
-A vehicle only engages in multi-zone route discovery when no zones which include its source also include its destination. Beginning at the border nodes of the source zone, vehicles request a depth-first search to discover the optimal path to their destination. Multi-zone route discovery requires multiple single-zone paths to be concatenated and assigned to the vehicle as its new route. The path from the vehicle's source node to each border node is stored for concatenation with the corresponding neighbouring zones. This process continues until one of the border nodes has a path to the destination node. Once the destination node is found, the discovery algorithm terminates with an execution of the single-zone route discovery procedure. The optimal multi-zone path is assigned to the vehicle if and only if it has a lower cost than the vehicle's current route.
+A vehicle only engages in multi-zone discovery when \textit{s} and \textit{d} reside in separate zones. When a routing assignment requires multi-zone discovery, a depth-first search is initiated by each source zone. Each zone makes a routing request to their neighbour zones, submitting the path from the source node to the border node. The neighbour then searches for the vehicle's destination starting at the border node. This process continues until the destination node is found. The zone which contains the destination node uses a table-lookup and updates the final path for the initial zone. The initial zone determines and assigns the optimal path considering all candidates and the vehicle's current route. While Z-BAR prunes paths in favor of a single optimum, Z-BAR may be modified to compute multiple paths for any vehicle.
 
 % pseudocode for multi zone discovery
 \begin{algorithm}[H]
   \caption{Multi-Zone Discovery}
   \label{route_discovery_multi_zone}
   \begin{algorithmic}[1]
-  \Procedure{MZDiscovery}{}
+  \Procedure{MZDiscovery}{$src, dest, path$}
+  \For{$z \in AllZones(src)$}
+    \For{$b \in z.borderNodes$}
+      \If{$\exists \bar{z} \in AllZones(b)\ unvisited$}
+        \State{$mark \bar{z} visited$}
+        \State{$pathToB \gets z.table[src, b]$}
+        \State{$MZDiscovery(b, dest, path+pathToB)$}
+      \EndIf
+    \EndFor
+  \EndFor
   \EndProcedure
   \end{algorithmic}
 \end{algorithm}
 
-% the approach and the algorithm. Effectively standard multi-zone routing. Intra: Storage. Inter: React. Dijkstra's for shortest path. Parallelism and async.
+The multi-zone discovery procedure is responsible for forwarding routing requests to all neighbouring zones. Zones send the path from their source to their border, gathering the nodes required for a complete route. A collection of visited nodes is stored to ensure the multi-zone phase does not enter an unbounded loop. Zones continue to fan out in search for the vehicle's destination until it is found. Once the destination is found, Z-BAR executes the single-zone procedure (table lookup) and the vehicle's route is reassigned as needed. The multi-zone and single-zone procedures form the routing assignment component of Z-BAR.
+
 \section{Simulation}
 
+Since the authors of this work did not have access to actual vehicles and transmission infrastructure, Z-BAR was tested against a vehicular network simulator. Simulator for Urban MObility, SUMO was selected as the simulation tool of choice. SUMO is a time-discrete, space-continuous microscopic simulator designed for analyzing the behavior of traffic systems, vehicular networks, and urban environments in general. 
+
+% more about SUMO and traci but not too much. Maybe a simple diagram and then describe experiment setup.
+
+% Need CSV output for metrics
 \section{Experimental Results} % exec over large scale data (Continue getting script to run)
 
 \section{Conclusion} % what did we find?
 
-\section{Future Work} % next...
+\section{Future Work} % next... Dynamic zones, multiple compute nodes, bigger datasets...
 
 \section*{Acknowledgment}
 
