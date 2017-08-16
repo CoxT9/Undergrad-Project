@@ -26,7 +26,7 @@ import sumolib
 import traci
 
 # need to keep this value down
-NEIGHBOUR_LIM = 10 # A zone is constructed with n hops from center node 
+NEIGHBOUR_LIM = 2 # A zone is constructed with n hops from center node 
 # 0.5% seems to be an effective number thus far
 
 
@@ -283,9 +283,9 @@ def runThreads(threads):
   for t in threads:
     t.join()
 
-def setVehicleColors(network, nodeToZoneDict, edgeOccupants):
+def setVehicleColors(network, nodeToZoneDict, edge, edgeOccupants):
   fromNode = network.getEdge(edge).getFromNode().getID()
-  currZone = nodeToZoneDict[fromNode][0]
+  currZone = min(nodeToZoneDict[fromNode])
   color = currZone.color
   for agent in edgeOccupants:
     traci.vehicle.setColor(agent, color)
@@ -309,7 +309,7 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
       edgeOccupants = traci.edge.getLastStepVehicleIDs(edge)
       speedData = [traci.vehicle.getSpeed(v) for v in edgeOccupants]
       if config.gui:
-        setVehicleColors(network, nodeToZoneDict, edgeOccupants)
+        setVehicleColors(network, nodeToZoneDict, edge, edgeOccupants)
 
       # Update edge ph at each step
       edgelen = network.getEdge(edge).getLength()
