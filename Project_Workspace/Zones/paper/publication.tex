@@ -140,7 +140,7 @@ Single-Zone route discovery is the core aspect of route discovery in Z-BAR. Sing
   \State{$assert\ src \neq dest$}
   \State{$zones \gets AllZones(src).filter(z: dest \in z)$}
   \State{$paths \gets zones.map(z: z.table[src,dest])$}
-  \State{$return min(min(paths))$}
+  \State{$return\ min(paths)$}
   \EndProcedure
   \end{algorithmic}
 \end{algorithm}
@@ -160,11 +160,11 @@ A vehicle only engages in multi-zone discovery when \textit{s} and \textit{d} re
   \Procedure{MZDiscovery}{$src, dest, path$}
   \For{$z \in AllZones(src)$}
     \For{$b \in z.borderNodes$}
-      \If{$\exists \bar{z} \in AllZones(b)\ unvisited$}
-        \State{$mark \bar{z} visited$}
+      \For{$\bar{z} \in AllZones(b): \bar{z}\ unvisited$}
+        \State{$mark\ \bar{z}\ visited$}
         \State{$pathToB \gets z.table[src, b]$}
         \State{$MZDiscovery(b, dest, path+pathToB)$}
-      \EndIf
+      \EndFor
     \EndFor
   \EndFor
   \EndProcedure
@@ -175,7 +175,7 @@ The multi-zone discovery procedure is responsible for forwarding routing request
 
 \section{Simulation}
 
-Z-BAR was tested against a vehicular network simulator for performance analysis purposes. Simulator for Urban MObility, SUMO was selected as the simulation tool of choice. SUMO is a time-discrete, space-continuous microscopic simulator designed for analyzing the behavior of traffic systems, vehicular networks, and urban environments in general. SUMO is an open-source tool with support for network generation, real-world imports, route generation and simulation inspection with a GUI tool. SUMO represents graphs and vehicles as XML files, which work together to create a traffic simulation. SUMO also includes APIs including the TRAffic Control Interface (TRACI) for documenting and recording simulation metrics such as vehicle timings and fuel emissions. In this work, SUMO and TRACI were used together to model the behavior Z-BAR in artificial and real-world road networks. Z-BAR was tested in a variety of simulations, using an ACO-based traffic density model inspired by [*], which also uses SUMO for experiments. Results from select experiments are discussed in the following section.
+Z-BAR was tested against a vehicular network simulator for performance analysis purposes. Simulator for Urban MObility, SUMO [*] was selected as the simulation tool of choice. SUMO is a time-discrete, space-continuous microscopic simulator designed for analyzing the behavior of traffic systems, vehicular networks, and urban environments in general. SUMO is an open-source tool with support for network generation, real-world imports, route generation and simulation inspection with a GUI tool. SUMO represents graphs and vehicles as XML files, which work together to create a traffic simulation. SUMO also includes APIs including the TRAffic Control Interface (TRACI) [*] for documenting and recording simulation metrics such as vehicle timings and fuel emissions. In this work, SUMO and TRACI were used together to model the behavior Z-BAR in artificial and real-world road networks. Z-BAR was tested in a variety of simulations, using an ACO-based traffic density model inspired by [*], which also uses SUMO for experiments. Results from select experiments are discussed in the following section.
 
 \begin{figure}[h]
 \caption{A screenshot of vehicles in SUMO, colored based on their zone.}
@@ -189,8 +189,6 @@ Z-BAR was tested against a vehicular network simulator for performance analysis 
 \section{Conclusion} % what did we find?
 
 \section{Future Work} % next... Dynamic zones, multiple compute nodes, bigger datasets...
-
-\section*{Acknowledgment}
 
 \begin{thebibliography}{1}
 \bibitem{}
