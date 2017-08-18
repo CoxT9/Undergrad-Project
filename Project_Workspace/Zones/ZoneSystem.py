@@ -27,12 +27,6 @@ import traci
 
 # need to keep this value down
 NEIGHBOUR_LIM = 2 # A zone is constructed with n hops from center node 
-# 0.5% seems to be an effective number thus far
-
-
-# Tradeoff:
-# Bigger zones = slower maintenance, faster discovery
-# Smaller zones: faster maintenance, slower discovery
 
 class Zone(object):
   def __init__(self, zid, center, network, memberNodes=None, borderNodes=None):
@@ -321,9 +315,6 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
         zonesNeedingUpdate |= set(nodeToZoneDict[network.getEdge(edge).getToNode().getID()])
         zonesNeedingUpdate |= set(nodeToZoneDict[network.getEdge(edge).getFromNode().getID()])
 
-    # Instead of Dijkstras against each pair, run Floyd Warshall once and make requests against it
-    # This would obviously be replicated in a distributed environment 
-    #(ie: each zone executes FW to find its own pairs)
     threads = []
     log("Setting intrazone routes with updated edge costs...", verbose)
     for z in list(zonesNeedingUpdate):
@@ -338,7 +329,6 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
     newRoutes = {}
     log("Assigning routes to vehicles...", verbose)
     for v in traci.vehicle.getIDList():
-
       currEdge = traci.vehicle.getRoadID(v)
       destNode = network.getEdge(traci.vehicle.getRoute(v)[-1]).getToNode().getID()
       # is there a faster way to do this? likely lots of repitition
@@ -353,7 +343,7 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
           currEdge,
           destNode,
           newRoutes,
-          sum(costStore[e] for e in traci.vehicle.getRoute(v)),
+          sum(costStore[e] for e in traci.vehicle.getRoute(v)[1:]),
           nodeToZoneDict
           )
         )
@@ -364,6 +354,7 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
       traci.vehicle.setRoute(key, newRoutes[key])
 
     traci.simulationStep()
+    print len(traci.vehicle.getIDList())
     if len(traci.vehicle.getIDList()) < 1:
       log("Vehicles left simulation at step %s" % step, verbose)
       break
@@ -379,30 +370,32 @@ def routeVehicle(vehId, edgeCostStore, network, edgeStore, edges, currEdge, dest
       currPath = []
       srcNode = network.getEdge(currEdge).getToNode().getID()
 
-      vehicleRoutingLock = Lock()
-      shortestZonePath(set(), srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgeStore, edgeCostStore, network, vehicleRoutingLock)
-      newRoute = edgeListConvert(scoreTable["bestPath"], edgeStore)
-      newRoutesDict[vehId] = [currEdge]+newRoute
+      shortestZonePath(set(), srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgeStore, edgeCostStore, network)
+      finalPath = scoreTable["bestPath"]
+      if len(finalPath) > 0:
+        newRoute = edgeListConvert(finalPath, edgeStore)
+        newRoutesDict[vehId] = [currEdge]+newRoute
 
 def getPathCost(vertexList, edgesStore, weights):
   return sum(weights[e] for e in edgeListConvert(vertexList, edgesStore))
 
 # Some pointer voodoo. Hold on tight!
-def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgesStore, weights, network, currentVehicleRoutingLock):
+# This is insane fast now. Something else broken?
+# Vehicles made it out. Make sure it worked though!!
+def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgesStore, weights, network):
   srcZones = nodeToZoneDict[srcNode]
   possibleZones = filter(lambda z: destNode in z, srcZones)
 
   if(len(possibleZones)) > 0: # Destination found in src's zone.
     possibleRoutes = map(lambda z: z.optimalRoutes[(srcNode, destNode)], possibleZones)
-    currPathCost = getPathCost(currPath[:-1], edgesStore, weights)
+    currPathCost = getPathCost(currPath, edgesStore, weights)
     pathToDest = currPath[:-1] + min(possibleRoutes, key=lambda k: getPathCost(k, edgesStore, weights) )
-    finalPathCost = getPathCost(pathToDest, edgesStore, weights)
+    currentCost = getPathCost(pathToDest, edgesStore, weights)
 
-    with currentVehicleRoutingLock:
-      bestCost = scoreTable["bestCost"]
-      if finalPathCost < bestCost:
-        scoreTable["bestPath"] = pathToDest
-        scoreTable["bestCost"] = finalPathCost
+    storedCost = scoreTable["bestCost"]
+    if currentCost < storedCost:
+      scoreTable["bestPath"] = pathToDest
+      scoreTable["bestCost"] = currentCost
 
   else: # Destination not found in src's zones.
     # So all the src zones don't have the destination. Mark them visited.
@@ -416,9 +409,9 @@ def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable
         if len(network.getNode(border).getOutgoing()) > 1 and set(nodeToZoneDict[border]).difference(visitedZones) != set():
           pathToBorder = [border] if border == srcNode else srcZone.optimalRoutes[(srcNode, border)]
 
-          if nonePresent(pathToBorder[1:], currPath):
+          if nonePresent(pathToBorder, currPath):
             # We haven't looked at this path yet
-            newPath = currPath[:-1] + pathToBorder
+            newPath = currPath + pathToBorder
 
             shortestZonePath(
                 visitedZones,
@@ -430,7 +423,6 @@ def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable
                 edgesStore,
                 weights,
                 network,
-                currentVehicleRoutingLock
               )
 
 """ Setup and benchmarking """
