@@ -5,10 +5,9 @@ the path between every pair of nodes within one zone is cached proactively (upda
 the path between multiple zones is evaluated on-demand (reactively).
 
 Ongoing challenges:
-- Slow performance in large scale data
-- No complete experimental output yet produced
+- Node path storage bug for real-world import data
 """
-
+# Prelim experiments showed results. Record to csv and add to paper
 import copy
 import datetime
 import itertools
@@ -26,8 +25,8 @@ import sumolib
 import traci
 
 # need to keep this value down
-NEIGHBOUR_LIM = 2 # A zone is constructed with n hops from center node 
-
+NEIGHBOUR_LIM = 5 # A zone is constructed with n hops from center node 
+# This should be a little bigger with RW data
 class Zone(object):
   def __init__(self, zid, center, network, memberNodes=None, borderNodes=None):
     self.color = (
@@ -101,12 +100,13 @@ class Zone(object):
     curr = pair[0]
     path = [curr]
     while curr != pair[1]:
-      curr = nexts[(curr, pair[1])]
+      try:
+        curr = nexts[(curr, pair[1])]
+      except KeyError:
+        print path, pair[1], pair[1] == None
+        raise KeyError
       path.append(curr)
     return path
-
-  def setPair(self, src, dest, routes, weights):
-    routes[(src, dest)] = dijkstra(src, dest, self.network, weights)
 
   def __contains__(self, nodeId):
     return nodeId in self.memberNodes
@@ -169,57 +169,16 @@ def collectNodes(collection, borderNodes, centerNode, stackdepth=0):
 
   if stackdepth < NEIGHBOUR_LIM:
     neighbours = [edge.getToNode() for edge in centerNode.getOutgoing() if edge.getToNode().getID() not in collection]
+    if any( any(item in n.getID() for item in ["OffRamp", "Cluster"]) for n in neighbours):
+      stackdepth -= 1 # Extra buffer for weird nodes
+
     for n in neighbours:
       if n not in collection and stackdepth == NEIGHBOUR_LIM-1:
         borderNodes.add(n.getID())
       collection.add(n.getID())
-    
+
     for n in neighbours:
       collectNodes(collection, borderNodes, n, stackdepth+1)
-
-""" Some old fashioned Dijkstra. Find the shortest path from @srcEdge to @destEdge on @network using @weights """
-def dijkstra(src, dest, network, weights):
-  if src == dest:
-    return [dest]
-
-  unvisited = {src}
-  visited = set()
-
-  totalCost = {src: 0}
-  candidates = {}
-
-  while unvisited:
-    # Pick smallest weight
-    current = min( [ (totalCost[node], node) for node in unvisited] )[1]
-    if current == dest:
-      break
-
-    unvisited.discard(current)
-    visited.add(current)
-
-    connectedNodesToEdges = {}
-    for edge in network.getNode(current).getOutgoing():
-      connectedNodesToEdges[network.getEdge(edge.getID()).getToNode().getID()] = edge.getID()
-
-    unvisitedNeighbours = set(connectedNodesToEdges.keys()).difference(visited)
-    for neighbour in unvisitedNeighbours:
-      nei_dist = totalCost[current] + weights[connectedNodesToEdges[neighbour]]
-      if nei_dist < totalCost.get(neighbour, float('inf')):
-        totalCost[neighbour] = nei_dist
-        candidates[neighbour] = current
-        unvisited.add(neighbour)
-
-  result = unpackPath(candidates, dest)
-  return result
-
-""" Dijkstra utility function """
-def unpackPath(candidates, dest):
-  goal = dest
-  path = []
-  while goal:
-    path.append(goal)
-    goal = candidates.get(goal)
-  return list(reversed(path))
 
 """ Convert list of vertices to list of edges. This crucial for interopability between graph traversal algorithms and SUMO APIs """
 def edgeListConvert(vertexList, edgesStore):
@@ -354,9 +313,9 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
       traci.vehicle.setRoute(key, newRoutes[key])
 
     traci.simulationStep()
-    print len(traci.vehicle.getIDList())
+    log("Vehicle population size at step %s: %s" % (step, len(traci.vehicle.getIDList())), verbose)
     if len(traci.vehicle.getIDList()) < 1:
-      log("Vehicles left simulation at step %s" % step, verbose)
+      log("All vehicles left simulation at step %s" % step, verbose)
       break
 
   traci.close(False)
@@ -370,7 +329,7 @@ def routeVehicle(vehId, edgeCostStore, network, edgeStore, edges, currEdge, dest
       currPath = []
       srcNode = network.getEdge(currEdge).getToNode().getID()
 
-      shortestZonePath(set(), srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgeStore, edgeCostStore, network)
+      shortestZonePath(set(), srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgeStore, edgeCostStore, network, vehId)
       finalPath = scoreTable["bestPath"]
       if len(finalPath) > 0:
         newRoute = edgeListConvert(finalPath, edgeStore)
@@ -382,7 +341,14 @@ def getPathCost(vertexList, edgesStore, weights):
 # Some pointer voodoo. Hold on tight!
 # This is insane fast now. Something else broken?
 # Vehicles made it out. Make sure it worked though!!
-def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgesStore, weights, network):
+def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgesStore, weights, network, v):
+  if v == '82':
+    try:
+      x = getPathCost(currPath, edgesStore, weights)
+    except:
+      print currPath
+      print v
+      raise Exception
   srcZones = nodeToZoneDict[srcNode]
   possibleZones = filter(lambda z: destNode in z, srcZones)
 
@@ -422,7 +388,7 @@ def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable
                 newPath,
                 edgesStore,
                 weights,
-                network,
+                network,v
               )
 
 """ Setup and benchmarking """
