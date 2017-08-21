@@ -387,7 +387,7 @@ def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable
     for srcZone in srcZones:
       # The borders will show us who the neighbours are
       for border in srcZone.borderNodes:
-        if len(network.getNode(border).getOutgoing()) > 1 and set(nodeToZoneDict[border]).difference(visitedZones) != set():
+        if len(network.getNode(border).getOutgoing()) >   1 and set(nodeToZoneDict[border]).difference(visitedZones) != set():
           pathToBorder = [border] if border == srcNode else srcZone.optimalRoutes[(srcNode, border)]
 
           if nonePresent(pathToBorder, currPath):

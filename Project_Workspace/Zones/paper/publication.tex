@@ -4,12 +4,11 @@
 % for condensed version of paper, all pseudocode is dropped
 
 % TODO:
-% keep editing
-% launch smaller zone experiments
+% launch smaller zone experiments (should not take too long) (zone size of 5 is extremely slow)
 % generate graphs
-% abstract
 % final passthrough
 % done
+
 \documentclass[conference]{IEEEtran}
 \usepackage{mathtools}
 
@@ -31,21 +30,20 @@
 
 % Is this an Algorithm or a framework: We want to highlight compatability
 
-\author{\IEEEauthorblockN{Taylor Cox}
+\author{\IEEEauthorblockN{Taylor Cox and Parimala Thulasiraman}
 \IEEEauthorblockA{Department of Computer Science\\
 University of Manitoba\\
 Winnipeg, Manitoba\\
-Email: coxt3@myumanitoba.ca}}
+Email: coxt3@myumanitoba.ca, thulasir@cs.umanitoba.ca}}
 
 \maketitle
 
-% need this still
 \begin{abstract}
-
+Traffic assignment networks are networks with pseudo-static behavior: the network topology is constant but the cost of each edge changes in real-time. Extensive work has been done in the literature to develop efficient traffic assignment algorithms in order to reduce traffic congestion. While some of these algorithms have proven to be effective, little attention has been paid to the matter of scalability in traffic networks. In this paper, we use zones to develop a hybrid approach to traffic assignment. We divide a traffic network into zones where the path within each zone is proactively stored, and paths between zones are reactively evaluated. This reduces the cost of route discovery. Using the Simulator of Urban MObility (SUMO), experiments were conducted to compare the zone-based system coined Z-BAR against a zone-free system. Between Z-BAR and a zone-free system, we found that Z-BAR introduces a speedup factor of up to x.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Zones, Traffic Assignment, Congestion Reduction, Scalibility
+Zones, Traffic Assignment, Congestion Reduction, Scalability
 \end{IEEEkeywords}
 
 \IEEEpeerreviewmaketitle
@@ -164,12 +162,18 @@ Z-BAR was tested against a vehicular network simulator to study its performance.
 \includegraphics[scale=0.2]{sumo_screenshot}
 \end{figure}
 
+\begin{figure}[h]
+\caption{The SUMO simulation process with Z-BAR}
+\centering
+\includegraphics[scale=0.22]{simulation_process}
+\end{figure}
+
 % Need CSV output for metrics
 
 % Edit this stuff after graphs come out
 \section{Experimental Results} % exec over large scale data (Continue getting script to run)
 
-Z-BAR was run against various networks with increasing size and population. This section covers the results of select experiments. Experiments included a medium-sized (750 edges) and a large-sized (1500 edges) network, created by the SUMO NETGENERATE tool. Each network was tested with multiple vehicle populations in order to emulate real-world traffic conditions. Each vehicle in the system is assigned a source and destination node. Z-BAR assigns routes to vehicles based on real-time changes in traffic congestion. The goal of Z-BAR is to achieve efficient traffic route optimization in a scalable manner. The experiments were conducted to compare Z-BAR against a route-assignment system that does not use zones, as seen in the related work of \cite{iaco} and \cite{dtpos}. Such works use repeated exuection of a path traversal algorithm to reassign vehicle routes. To execute the experiments, an eight-core Intel(R) i7-4720 processor was used at 3.35GHz speed with 8 GB of memory. The following figure shows the difference in execution time between the zone-based and edge-based approaches. Experiments were run with a zone radius of 2 and of 5. The larger of the two networks was used as the smaller network did not show significant changes in results. Both systems were tested against the network with vehicle populations of 1500, 3000, 4500, 6000, and 7500.
+Z-BAR was run against various networks with increasing size and population. Experiments included a medium-sized (750 edges) and a large-sized (1500 edges) network, created by the SUMO NETGENERATE tool. Each network was tested with multiple vehicle populations in order to emulate real-world traffic conditions. Each vehicle in the system is assigned a source and destination node. Z-BAR assigns routes to vehicles based on real-time changes in traffic congestion. The goal of Z-BAR is to achieve efficient traffic route optimization in a scalable manner. The experiments were conducted to compare Z-BAR against a route-assignment system that does not use zones, as seen in the related work of \cite{iaco} and \cite{dtpos}. Such works use repeated exuection of a path traversal algorithm to reassign vehicle routes. To execute the experiments, an eight-core Intel(R) i7-4720 processor was used at 3.35GHz speed with 8 GB of memory. The following figures show the difference in execution time between the zone-based and edge-based approaches. Experiments were run with a zone radius of 2 and of 5. The results from the larger network is shown as the smaller network did not show significant changes in results. The zone-based and zone-free systems were tested against the network with vehicle populations of 1500, 3000, 4500, 6000, and 7500.
 
 % exec time graph to compare
 
@@ -178,7 +182,7 @@ Z-BAR was run against various networks with increasing size and population. This
 % discuss results
 
 % put some numbers here
-With zones of size 5, Z-BAR is outperformed by a system which does not use zones. This is likely due to the overhead involved with maintaining larger routes within each zone. However, when the zone size was set to 2, Z-BAR performs faster than the zone-free system. Smaller zone sizes means less time is spent evaluating intrazone routes. With small zones, it is faster to join multiple paths together than to re-evalaute whole paths at each simulation step. The speed improvement of Z-BAR over non-zone assignment implies that Z-BAR allows traffic assignment algorithms to scale to very large networks.
+With zones of size 5, Z-BAR is outperformed by the zone-free system. This is likely due to the overhead involved with maintaining larger routes within each zone. However, when the zone size was set to 2, Z-BAR performs faster than the zone-free system. Smaller zone sizes means less time is spent evaluating intrazone routes. With small zones, it is faster to join multiple paths together than to re-evalaute whole paths at each simulation step. The speed improvement of Z-BAR over non-zone assignment implies that Z-BAR allows traffic assignment algorithms to scale to very large networks.
 
 \section{Conclusions and Future Work} % what we found:
 
