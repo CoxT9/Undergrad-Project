@@ -502,6 +502,7 @@ def executeOptimized(compliantAgents, config, startCommand):
       traci.vehicle.setRoute(key, newRoutes[key])
 
     traci.simulationStep()
+    lastStep = _
     if len(traci.vehicle.getIDList()) < 1:
       break
     
@@ -511,7 +512,7 @@ def executeOptimized(compliantAgents, config, startCommand):
   time.sleep(1)
   print "\nDone."
   print sum([routingCount[item] for item in routingCount]), " total reroutes"
-  return averages(sumolist(config.logfile), compliantAgents, waitTimes), routingTimeCost
+  return averages(sumolist(config.logfile), compliantAgents, waitTimes), routingTimeCost, lastStep
 
 """ Setup and benchmarking """
 def main():
@@ -522,7 +523,7 @@ def main():
   sumoGui = ["/usr/local/bin/sumo-gui", "-c", config]
   sumoCmd = ["/usr/local/bin/sumo", "-c", config]
 
-  simulationResults, routingTimeCost = executeOptimized(copy.deepcopy(compliantAgents), configPaths, sumoGui if gui else sumoCmd)
+  simulationResults, routingTimeCost, step = executeOptimized(copy.deepcopy(compliantAgents), configPaths, sumoGui if gui else sumoCmd)
   simulationResults.dumpMetrics()
 
   # Measure wait time and travel time of compliant and total agents. Also record execution time
@@ -539,7 +540,7 @@ def main():
       execSeconds = time.time() - starttime
 
    #   csv.write(date +","+ compliantTravelTime +","+ overallTravelTime +","+ compliantWaitTime +","+ overallWaitTime +","+ complianceFactor +","+ averageRoutingTime +","+ execSeconds)
-      csv.write(date +","+ str(overallTravelTime) +","+ str(overallWaitTime) +","+ str(execSeconds))
+      csv.write(date +","+ str(overallTravelTime) +","+ str(overallWaitTime) +","+ str(execSeconds) +","+ str(step))
 
 
 

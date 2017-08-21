@@ -324,6 +324,7 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
       traci.vehicle.setRoute(key, newRoutes[key])
 
     traci.simulationStep()
+    lastStep = step
     log("Vehicle population size at step %s: %s" % (step, len(traci.vehicle.getIDList())), verbose)
     if len(traci.vehicle.getIDList()) < 1:
       log("All vehicles left simulation at step %s" % step, verbose)
@@ -332,7 +333,7 @@ def launchSim(zoneStore, nodeToZoneDict, network, sim, config, verbose):
   traci.close(False)
   log("Completed Execution.", verbose)
 
-  return averages(sumolist(config.logfile), waitTimes.keys(), waitTimes)
+  return averages(sumolist(config.logfile), waitTimes.keys(), waitTimes), lastStep
 
 """ Average out wait time and travel time metrics """
 def averages(logfile, agents, waitTimes):
@@ -432,7 +433,7 @@ def main():
 
   zoneStore, nodeToZones = assignNodesToZones(network, nodes, verbose)
   exc = sumoGui if gui else sumoCmd
-  avgs = launchSim(zoneStore, nodeToZones, network, exc, configPaths, verbose)
+  avgs, step = launchSim(zoneStore, nodeToZones, network, exc, configPaths, verbose)
 
   # also need csv output
   # route timings and total exec timings, size of graph and population too
@@ -446,7 +447,7 @@ def main():
       avgWT = avgs[1]
       timeExec = time.time() - starttime
 
-      csv.write(date +","+ str(avgTT) +","+ str(avgWT) +","+ str(timeExec))
+      csv.write(date +","+ str(avgTT) +","+ str(avgWT) +","+ str(timeExec) +","+ str(step))
 
 if __name__ == "__main__":
   starttime = time.time()
