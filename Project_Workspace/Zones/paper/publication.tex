@@ -1,6 +1,20 @@
 % Draft of paper for Zone based traffic-sensitive routing
 % The aim here is to show an increase in scalibility with a preservation of traffic reduction (show that the zone system will work with any model)
 
+
+% TODO:
+
+% launch experiments
+% turn results into graph
+% combine 2 algs into 1
+% clean up alg section
+% move combined alg to simulation section
+% add explanation for alg in sim section
+% tweak experiments section to reflect graph
+% tweak conclusion to reflect graph
+% write abstract
+% final proofread/edit
+% done
 \documentclass[conference]{IEEEtran}
 \usepackage{mathtools}
 
@@ -28,8 +42,8 @@ Email: coxt3@myumanitoba.ca}}
 
 \maketitle
 
+% need this still
 \begin{abstract}
-
 
 \end{abstract}
 
@@ -71,54 +85,17 @@ Outside of traffic optimization, there is work done in the literature which cove
 In the literature, zone-based routing has been successful in a wide array of applications. It is anticipated that a zone-routing strategy will be successful in improving the scalibility of existing traffic assignment algorithms. Storing optimal (least congested) intrazone paths and evaluated interzone paths on demand is a more scalable alternative to evalauting whole-network paths on every vehicle traversal. To the knowledge of the authors, the zone routing protocol has not been applied to the traffic assignment optimization problem.
 
 \section{Z-BAR Algorithm} % how we will tackle the issues, give the algorithm
-
+% clean up this section - shorter
 The Z-BAR algorithm involves the partioning of a traffic network into multiple zones. Local routes within each zone are proactively maintained by routing tables, while vehicles individually evaluate their routes reactively when traversing across multiple zones. The network is divided into a number of zones proportional to the total number of roads in the network. A zone consists of all nodes within a radius \textit{r} of some center node. This includes the edges between all member nodes. The radius of a node is determined by the number of hops required to reach the node from the center. The previous figure shows a zone system with a radius of 2. If a node is exactly \textit{r} hops away from its center, it is designated a border node. Border nodes are responsible for maintaining the paths between all of the zones in which they belong. The Z-BAR algorithm is divided into three components: zone formation, route maintenance and route discovery.
 
 \subsection{Zone Formation}
 
-The first step of Z-BAR is the division of the road network into multiple zones. Each zone consists of all nodes and edges up to \textit{r} hops from the center. Zones are responsible for their own routing tables, a data structure which stores the optimal path between each pair of vertices within a zone. Routing tables are initialized on zone creation, and populated during route maintenance. The zone formation step of Z-BAR proceeds until each node belongs to at least one zone.
-
-% zone setup pseudocode 
-\begin{algorithm}[H]
-  \caption{Zone Formation}
-  \label{zone_formation}
-  \begin{algorithmic}[1] % The number tells where the line numbering should start
-  \Procedure{Formation}{$G$}
-  \State{$Zones \gets [\ ]$}
-  \For{$v \in G$}
-    \If{$v\ unassigned$}
-      \State{$center \gets v$}
-      \State{$Z \gets newZone(radius, center, G)$}
-      \State{$Zones.append(Z)$}
-    \EndIf
-  \EndFor
-  \State{$return\ Zones$}
-  \EndProcedure
-  \end{algorithmic}
-\end{algorithm}
-
-% complexity analysis?
-
-The above procedure executes for each node in the network, corresponding to vertices in a graph \textit{G}. Nodes not yet part of any zone are designated the center of the next zone, which is formed by a breadth-first search starting at the center node and extending to \textit{r} hops. The procedure will exit once all nodes belong to at least one zone. This guarantees full coverage of the network into multiple, possibly overlapping zones. The procedure then returns the collection of zones which cover \textit{G}.
+The first step of Z-BAR is the division of the road network into multiple zones. Each zone consists of all nodes and edges up to \textit{r} hops from the center. Zones are responsible for their own routing tables, a data structure which stores the optimal path between each pair of vertices within a zone. Routing tables are initialized on zone creation, and populated during route maintenance. The zone formation step of Z-BAR proceeds until each node belongs to at least one zone. Zone formation considers each node in the network, corresponding to vertices in a graph \textit{G}. Nodes not yet part of any zone are designated the center of the next zone, which is formed by a breadth-first search starting at the center node and extending to \textit{r} hops. The procedure will exit once all nodes belong to at least one zone. This guarantees full coverage of the network into multiple, possibly overlapping zones. Is is therefore guaranteed that the path between any two vertices in the graph will be covered by some combination of zones.
 
 \subsection{Route Maintenance}
 
 Once the network has been divided into zones, the routing table of each zone must be established and periodically maintained. Note that each zone's routing table is initialized to an empty table on startup. Routing tables store the optimal path between each pair of nodes within a zone. This process begins once Z-BAR itself moves from setup to launch. On a designated time interval, each zone updates its routing table based on the latest traffic data. This data is gathered by a peer-to-peer system such as a Vehicular Ad-Hoc Network (VANET). Dividing the network into zones elimintates the need for a central route assignment authority. Frequent routing table updates allows zones to capture the pseudostatic nature of traffic networks: the network topology is constant while the weight of each edge is subject to change.
-
-\begin{algorithm}[H]
-  \caption{Route Maintenance}
-  \label{route_maintenance}
-  \begin{algorithmic}[1]
-  \Procedure{UpdateRoutingTable}{$Weights$}
-  \State{$paths \gets optimalPaths(nodes,\ edges,\ Weights)$}
-  \For{$u,v \in nodes$}
-    \State{$table[u,\ v] \gets paths[u,\ v]$}
-  \EndFor
-  \EndProcedure
-  \end{algorithmic}
-\end{algorithm}
-
-The above procedure is meant to be executed upon each zone on a regular schedule. This may correspond to daily, hourly, or minute-by-minute updates. The update schedule of routing tables may be adjusted depending on past and expected traffic fluctuations within the zone. Since intrazone routes are not dependent on other zones or any shared resources, the update procedure of each zone's routing table may be executed in parallel. Zones may be managed by individual threads or compute nodes, resulting in further scalability. Optimal paths between each pair of nodes \textit{u, v} within the zone are discovered by an execution of the Floyd-Warshall algorithm. The route maintenance step is intended to be executed continually by Z-BAR, allowing vehicles in the system to use multiple intrazone routing tables for route discovery.
+Route maintenance covers each zone on a regular schedule. This may correspond to daily, hourly, or minute-by-minute updates. The update schedule of routing tables may be adjusted depending on past and expected traffic fluctuations within the zone. Since intrazone routes are not dependent on other zones or any shared resources, the update procedure of each zone's routing table may be executed in parallel. Zones may be managed by individual threads or compute nodes, resulting in further scalability. Optimal paths between each pair of nodes \textit{u, v} within the zone are discovered by an execution of the Floyd-Warshall algorithm. The route maintenance step is intended to be executed continually by Z-BAR, allowing vehicles in the system to use multiple intrazone routing tables for route discovery.
 
 \subsection{Route Discovery}
 
@@ -172,6 +149,10 @@ The multi-zone discovery procedure is responsible for forwarding routing request
 
 \section{Simulation}
 
+The multi-zone and single-zone aspects of Z-BAR are combined into a single cohesive algorithm to search for optimal paths in a traffic network. Z-BAR uses single-zone routing as a base case (destination node is found) and executes multi-zone recursively, allowing zones to send requests to their neighbours until a zone is found which includes the path to the destination. % write something else here
+
+% combine the algs
+
 Z-BAR was tested against a vehicular network simulator for performance analysis purposes. Simulator for Urban MObility, \cite{sumo} was selected as the simulation tool of choice. SUMO is a time-discrete, space-continuous microscopic simulator designed for analyzing the behavior of traffic systems, vehicular networks, and urban environments in general. SUMO is an open-source tool with support for network generation, real-world imports, route generation and simulation inspection with a GUI tool. SUMO represents graphs and vehicles as XML files, which work together to create a traffic simulation. SUMO also includes APIs including the TRAffic Control Interface (TRACI) \cite{traci} for documenting and recording simulation metrics such as vehicle timings and fuel emissions. In this work, SUMO and TRACI were used together to model the behavior Z-BAR in artificial and real-world road networks. Z-BAR was tested in a variety of simulations, using an ACO-based traffic density model similar to \cite{iaco}, which also uses SUMO for experiments. Results from select experiments are discussed in the following section.
 
 \begin{figure}[h]
@@ -183,37 +164,9 @@ Z-BAR was tested against a vehicular network simulator for performance analysis 
 % Need CSV output for metrics
 \section{Experiments and Results} % exec over large scale data (Continue getting script to run)
 
-Experiments of Z-BAR were run against various networks of increasing size and population. This section covers the results of select experiments. A medium-sized (700 edges) network with a large population (3500 vehicles) and a large-sized network (1400 edges) with a similar population (4500 vehicles) were tested. Both of the networks used in this work were generated by the SUMO NETGENERATE tool. These networks and vehicle populations are meant to reflect real-world traffic conditions. Each vehicle in the system is assigned a source and destination node. Vehicles embark on their route via a single execution of Dijkstra's algorithm to determine the shortest path. Z-BAR re-assigns routes to vehicles based on real-time changes in traffic congestion. In the following figure, the difference in travel time and wait-time is shown between Z-BAR and the Dijkstra's algorithm approach against the largest of the two simulation networks.
+Experiments of Z-BAR were run against various networks of increasing size and population. This section covers the results of select experiments. Tests included a medium-sized (750 edges) and a large-sized (1500 edges) network, created by the SUMO NETGENERATE tool. Each network was tested with multiple vehicle populations in order to emulate real-world traffic conditions. Each vehicle in the system is assigned a source and destination node. Vehicles initialize their route with a single execution of Dijkstra's algorithm to determine the shortest path. Z-BAR re-assigns routes to vehicles based on real-time changes in traffic congestion. The goal of Z-BAR is to achieve efficient traffic route optimization in a scalable manner. The experiments were conducted to compare Z-BAR against a route-assignment system that does not use zones, as seen in the related work of \cite{iaco} and \cite{dtpos}. Such works use repeated exuection of a path traversal algorithm to reassign vehicle routes. To execute the experiments, an eight-core Intel(R) i7-4720 processor was used at 3.35GHz and with 8 GB of memory. The following figure shows the difference in execution time between the zone-based and edge-based approaches. The larger of the two networks was used as the smaller network did not show significant changes in results. Both systems were tested against the network with vehicle populations of 1500, 3000, 4500, 6000, and 7500.
 
-% Graphs that show decrease in travel/wait time. Need to use Z-BAR (could be slow to exec...)
-
-The goal of Z-BAR is to achieve efficient traffic route optimization in a scalable manner. In order to illustrate the scalability of Z-BAR, an additional set of experiments was conducted to compare Z-BAR against a route-assignment system that does not use zones, as seen in the related work of \cite{iaco} and \cite{dtpos}. Such works use repeated exuection of a path traversal algorithm to reassign vehicle routes. On the computing hardware described, the difference in speed between Z-BAR and repeated path traversal is shown in the figures below.
-
-% Computing arch table
-\begin{table}[H]
-\renewcommand{\arraystretch}{1.5}
-\caption{Experimental Hardware}
-\label{table_example}
-\centering
-
-\begin{tabular}{|c|c|}
-\hline
-Attribute & Value\\
-\hline
-Operating System & Ubuntu 14.04 on Windows 10 64bit\\
-\hline
-CPU & Intel(R) i7-4720\\
-\hline
-Cores & 8 (2 logical cores per 4 physical cores)\\
-\hline
-Clock Speed & 3.36GHz\\
-\hline
-Memory (RAM) & 8 GB\\
-\hline
-\end{tabular}
-\end{table}
-
-% Also winnipeg?
+% exec time graph to compare
 
 \section{Conclusions and Future Work} % what did we find?
 

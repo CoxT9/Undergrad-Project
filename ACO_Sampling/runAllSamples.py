@@ -6,7 +6,7 @@ import subprocess
 import time
 import ACOModel as model
 inittime = time.time()
-configFiles = sys.argv[2:-1]
+configFiles = sys.argv[1:-1]
 csvFile = sys.argv[-1]
 print configFiles
 #sys.exit(0)
