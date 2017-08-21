@@ -102,11 +102,7 @@ class Zone(object):
     curr = pair[0]
     path = [curr]
     while curr != pair[1]:
-      try:
-        curr = nexts[(curr, pair[1])]
-      except KeyError:
-        print path, pair[1], pair[1] == None
-        raise KeyError
+      curr = nexts[(curr, pair[1])]
       path.append(curr)
     return path
 
@@ -367,16 +363,7 @@ def getPathCost(vertexList, edgesStore, weights):
   return sum(weights[e] for e in edgeListConvert(vertexList, edgesStore))
 
 # Some pointer voodoo. Hold on tight!
-# This is insane fast now. Something else broken?
-# Vehicles made it out. Make sure it worked though!!
 def shortestZonePath(visitedZones, srcNode, destNode, nodeToZoneDict, scoreTable, currPath, edgesStore, weights, network, v):
-  if v == '82':
-    try:
-      x = getPathCost(currPath, edgesStore, weights)
-    except:
-      print currPath
-      print v
-      raise Exception
   srcZones = nodeToZoneDict[srcNode]
   possibleZones = filter(lambda z: destNode in z, srcZones)
 
@@ -440,6 +427,8 @@ def main():
 
   # Write to CSV:
   # datetime, avgTT, avgWT, exec Time
+
+  # Whatever happened to the double speedup?
   if csvFile != "nil":
     with open(csvFile, 'a') as csv:
       date = str(datetime.datetime.now())
@@ -447,7 +436,7 @@ def main():
       avgWT = avgs[1]
       timeExec = time.time() - starttime
 
-      csv.write(date +","+ str(avgTT) +","+ str(avgWT) +","+ str(timeExec) +","+ str(step))
+      csv.write(date +","+ str(avgTT) +","+ str(avgWT) +","+ str(timeExec) +","+ str(step) +"\n")
 
 if __name__ == "__main__":
   starttime = time.time()

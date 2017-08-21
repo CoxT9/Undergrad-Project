@@ -540,7 +540,7 @@ def main():
       execSeconds = time.time() - starttime
 
    #   csv.write(date +","+ compliantTravelTime +","+ overallTravelTime +","+ compliantWaitTime +","+ overallWaitTime +","+ complianceFactor +","+ averageRoutingTime +","+ execSeconds)
-      csv.write(date +","+ str(overallTravelTime) +","+ str(overallWaitTime) +","+ str(execSeconds) +","+ str(step))
+      csv.write(date +","+ str(overallTravelTime) +","+ str(overallWaitTime) +","+ str(execSeconds) +","+ str(step)+"\n")
 
 
 
