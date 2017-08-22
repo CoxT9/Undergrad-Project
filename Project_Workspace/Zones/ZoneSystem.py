@@ -27,7 +27,7 @@ import sumolib
 import traci
 
 # need to keep this value down
-NEIGHBOUR_LIM = 5 # A zone is constructed with n hops from center node 
+NEIGHBOUR_LIM = 2 # A zone is constructed with n hops from center node 
 # This should be a little bigger with RW data
 class Zone(object):
   def __init__(self, zid, center, network, memberNodes=None, borderNodes=None):
