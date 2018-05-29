@@ -150,6 +150,7 @@ def parseArgs():
     log("Usage: %s <ConfigFile> <0/1> <CsvFile> <0/1>" % sys.argv[0])
     exit(0)
 
+  # config file, enable the gui? 0/1, csv output path, verbose logging? 0/1
   config = sys.argv[1]
   gui = bool(int(sys.argv[2]))
   csvFile = sys.argv[3]
@@ -433,9 +434,8 @@ def main():
     with open(csvFile, 'a') as csv:
       date = str(datetime.datetime.now())
       avgTT = avgs[0]
-      avgWT = avgs[1]
       timeExec = time.time() - starttime
-
+      # avg travel time, avg wait time, exec time (program), how many steps
       csv.write(date +","+ str(avgTT) +","+ str(avgWT) +","+ str(timeExec) +","+ str(step) +"\n")
 
 if __name__ == "__main__":
